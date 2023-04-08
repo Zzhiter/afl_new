@@ -10,11 +10,7 @@ afl-gotcpu
 afl-showmap
 afl-tmin
 as
-jpg/
 test
-ok_jpg.h
-ok_jpg.c
-main_jpg.c
 core
 
 # Binaries produced by "make -C llvm_mode"
