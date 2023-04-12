@@ -60,13 +60,13 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
-uint64_t __afl_gep_index_min_initial[1 << 10];
+uint64_t __afl_gep_index_min_initial[5000];
 uint64_t *__afl_gep_index_min = __afl_gep_index_min_initial;
 
-uint64_t __afl_gep_index_max_initial[1 << 10];
+uint64_t __afl_gep_index_max_initial[5000];
 uint64_t *__afl_gep_index_max = __afl_gep_index_max_initial;
 
-uint64_t __afl_gep_size_initial[1 << 10];
+uint64_t __afl_gep_size_initial[5000];
 uint64_t * __afl_gep_size_ptr = __afl_gep_size_initial;
 
 __thread u32 __afl_prev_loc;
@@ -130,8 +130,8 @@ static void __afl_map_shm(void) {
 
     // set pointer after trace_bits
     __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];
-    __afl_gep_index_min = &__afl_gep_size_ptr[1 << 10];
-    __afl_gep_index_max = &__afl_gep_index_min[1 << 10];
+    __afl_gep_index_min = &__afl_gep_size_ptr[5000];
+    __afl_gep_index_max = &__afl_gep_index_min[5000];
 
   }
 

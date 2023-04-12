@@ -1367,7 +1367,7 @@ EXP_ST void setup_shm(void) {
   // shm_id = shmget(IPC_PRIVATE, MAP_SIZE, 
   //                 IPC_CREAT | IPC_EXCL | 0600);
 
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (1 << 10) * sizeof(u64) * 3, 
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (5000) * sizeof(u64) * 3, 
                   IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
@@ -1390,12 +1390,12 @@ EXP_ST void setup_shm(void) {
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
 
   gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
-  gep_index_min_ptr = gep_size_ptr + (1 << 10);
-  gep_index_max_ptr = gep_index_min_ptr + (1 << 10);
+  gep_index_min_ptr = gep_size_ptr + (5000);
+  gep_index_max_ptr = gep_index_min_ptr + (5000);
 
   if (!gep_size_ptr || !gep_index_min_ptr || !gep_index_max_ptr) PFATAL("shmat() failed");
 
-  memset(gep_size_ptr, 0, (1 << 10) * sizeof(u64) * 3);
+  memset(gep_size_ptr, 0, (5000) * sizeof(u64) * 3);
 }
 
 
@@ -3164,7 +3164,7 @@ static void write_crash_readme(void) {
 
 static inline int has_new_gep_max() {
   // 这个不需要了。
-  // u32 mem_cksum = hash32(gep_index_max_ptr, 1 << 10, HASH_CONST);
+  // u32 mem_cksum = hash32(gep_index_max_ptr, 5000, HASH_CONST);
   if (gep_index_max_ptr[0] > 0) {
     if (gep_index_max_ptr[1] > 0) 
       return 2;
