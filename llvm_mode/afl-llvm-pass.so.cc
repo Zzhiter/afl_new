@@ -51,9 +51,10 @@ using namespace llvm;
 
 uint64_t id = 2;
 
-namespace {
+namespace
+{
 
-  class AFLCoverage : public ModulePass 
+  class AFLCoverage : public ModulePass
   {
 
   public:
@@ -82,7 +83,6 @@ namespace {
   };
 
 }
-
 
 char AFLCoverage::ID = 0;
 
@@ -224,6 +224,8 @@ bool AFLCoverage::runOnModule(Module &M)
   }
 
   /* Our Instrument before afl's */
+
+  int inst_afl_compare = 0;
 
   for (auto &F : M)
   {
@@ -436,9 +438,7 @@ bool AFLCoverage::runOnModule(Module &M)
                 errs() << "Find a variable stack GEP! \n";
 
                 IRBuilder<> IRB(&Inst);
-                uint64_t cur_id = id++;
-                ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
-
+                
                 // if the source type is not array type, continue
                 const Type *GepSourceType = GEP->getSourceElementType();
                 if (!ArrayType::classof(GepSourceType))
@@ -446,11 +446,16 @@ bool AFLCoverage::runOnModule(Module &M)
 
                 uint64_t array_size = GepSourceType->getArrayNumElements();
                 ConstantInt *arraySize = ConstantInt::get(Int64Ty, array_size);
+
+                uint64_t cur_id = id ++;
+                ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
               
                 /* call compare function */
 
                 insertAflCompare(IRB, CurId,
                                  arraySize, GEP->getOperand(2), C, M, compareFunc);
+                
+                inst_afl_compare ++;
               }
             }
           }
@@ -534,8 +539,6 @@ bool AFLCoverage::runOnModule(Module &M)
                 errs() << "Find a variable heap GEP! \n";
 
                 IRBuilder<> IRB(&Inst);
-                uint64_t cur_id = id++;
-                ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
 
                 // 正常的指针访问
                 // int *ptr3 = (int *)malloc(40 * sizeof(int));
@@ -562,7 +565,11 @@ bool AFLCoverage::runOnModule(Module &M)
                   {
                     uint64_t arrayByteSize = ptrMapConst[ptrValueInst];
                     ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayByteSize / elementSize);
+                    uint64_t cur_id = id++;
+                    ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
+
                     insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
+                    inst_afl_compare ++;
                   }
                   // 访存大小是变量
                   else if (ptrMapVar.count(ptrValueInst) && ptrMapVar[ptrValueInst])
@@ -594,7 +601,11 @@ bool AFLCoverage::runOnModule(Module &M)
 
                   uint64_t arrayNumElements = gepSourceType->getArrayNumElements();
                   ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayNumElements);
+                  uint64_t cur_id = id++;
+                  ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
+
                   insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
+                  inst_afl_compare ++;
                 }
               }
             }
@@ -603,6 +614,8 @@ bool AFLCoverage::runOnModule(Module &M)
       }
     }
   }
+
+  OKF("Instrumented %u afl compare locations.", inst_afl_compare);
 
   /* Instrument all the things! */
 
@@ -669,17 +682,15 @@ bool AFLCoverage::runOnModule(Module &M)
   return true;
 }
 
-
 static void registerAFLPass(const PassManagerBuilder &,
-                            legacy::PassManagerBase &PM) {
+                            legacy::PassManagerBase &PM)
+{
 
   PM.add(new AFLCoverage());
-
 }
 
-
 static RegisterStandardPasses RegisterAFLPass(
-    PassManagerBuilder::EP_ModuleOptimizerEarly, registerAFLPass);
+    PassManagerBuilder::EP_OptimizerLast, registerAFLPass);
 
 static RegisterStandardPasses RegisterAFLPass0(
     PassManagerBuilder::EP_EnabledOnOptLevel0, registerAFLPass);

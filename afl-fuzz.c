@@ -197,7 +197,9 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            bytes_trim_in,             /* Bytes coming into the trimmer    */
            bytes_trim_out,            /* Bytes coming outa the trimmer    */
            blocks_eff_total,          /* Blocks subject to effector maps  */
-           blocks_eff_select;         /* Blocks selected as fuzzable      */
+           blocks_eff_select,         /* Blocks selected as fuzzable      */
+           total_gep_index_max_cnt,   /* Total count of hit gep max cnt */
+           total_gep_threshold_cnt;   /* Total count of hit gep threshold cnt */
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -250,7 +252,8 @@ struct queue_entry {
       has_new_cov,                    /* Triggers new coverage?           */
       var_behavior,                   /* Variable behavior?               */
       favored,                        /* Currently favored?               */
-      fs_redundant;                   /* Marked as redundant in the fs?   */
+      fs_redundant,                  /* Marked as redundant in the fs?   */
+      is_hit_gep_threshold;           /* If this case hit gep threshold */
 
   u32 bitmap_size,                    /* Number of bits set in bitmap     */
       exec_cksum,                     /* Checksum of the execution trace  */
@@ -3163,12 +3166,18 @@ static void write_crash_readme(void) {
 }
 
 static inline int has_new_gep_max() {
-  // 这个不需要了。
-  // u32 mem_cksum = hash32(gep_index_max_ptr, 5000, HASH_CONST);
+    // 这个不需要了。
+  // u32 mem_cksum = hash32(gep_index_max_ptr, 1 << 10, HASH_CONST);
   if (gep_index_max_ptr[0] > 0) {
+    // 到达了9/10的界限
     if (gep_index_max_ptr[1] > 0) 
+    {
+      total_gep_threshold_cnt ++;
       return 2;
 
+    }
+      
+    // hit了新的gep max
     return 1; 
   } 
 
@@ -3217,6 +3226,10 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
     if (hngm == 1) {
       queue_top->gep_index_max_cnt = gep_index_max_ptr[0];
+    }
+
+    if (hngm == 2) {
+      queue_top->is_hit_gep_threshold = 1;
     }
 
     queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
@@ -4202,6 +4215,18 @@ static void show_stats(void) {
 
   SAYF(bSTOP " count coverage : " cRST "%-21s " bSTG bV "\n", tmp);
 
+  /* Our gep states */
+
+  sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
+
+  SAYF(bV bSTOP "total hit maxgep : " cRST "%-17s " bSTG bV, tmp);
+
+  sprintf(tmp, "%s hit",  DI(total_gep_threshold_cnt));
+
+  SAYF(bSTOP "  threshold cnt : " cRST "%-21s " bSTG bV "\n", tmp);
+
+  /* end of our gep states */
+
   SAYF(bVR bH bSTOP cCYA " stage progress " bSTG bH20 bX bH bSTOP cCYA
        " findings in depth " bSTG bH20 bVL "\n");
 
@@ -5061,7 +5086,8 @@ static u8 fuzz_one(char** argv) {
     if ((queue_cur->was_fuzzed || !queue_cur->favored) &&
         UR(100) < SKIP_TO_NEW_PROB) return 1;
 
-  } else if (!dumb_mode && !queue_cur->favored && queued_paths > 10) {
+  } else if (!dumb_mode && !queue_cur->favored && !queue_cur->is_hit_gep_threshold 
+              && queued_paths > 10) {
 
     /* Otherwise, still possibly skip non-favored cases, albeit less often.
        The odds of skipping stuff are higher for already-fuzzed inputs and
