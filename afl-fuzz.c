@@ -4217,11 +4217,13 @@ static void show_stats(void) {
 
   /* Our gep states */
 
-  sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
+  // sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
+  sprintf(tmp, "%s ", DI(gep_index_max_ptr[2]));
 
   SAYF(bV bSTOP "total hit maxgep : " cRST "%-17s " bSTG bV, tmp);
 
-  sprintf(tmp, "%s hit",  DI(total_gep_threshold_cnt));
+  // sprintf(tmp, "%s hit",  DI(total_gep_threshold_cnt));
+  sprintf(tmp, "%s ", DI(gep_index_max_ptr[3]));
 
   SAYF(bSTOP "  threshold cnt : " cRST "%-21s " bSTG bV "\n", tmp);
 
