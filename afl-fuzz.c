@@ -3169,6 +3169,8 @@ static inline int has_new_gep_max() {
     // 这个不需要了。
   // u32 mem_cksum = hash32(gep_index_max_ptr, 1 << 10, HASH_CONST);
   if (gep_index_max_ptr[0] > 0) {
+    total_gep_index_max_cnt ++;
+    
     // 到达了9/10的界限
     if (gep_index_max_ptr[1] > 0) 
     {
