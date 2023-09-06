@@ -1367,10 +1367,7 @@ EXP_ST void setup_shm(void) {
   memset(virgin_tmout, 255, MAP_SIZE);
   memset(virgin_crash, 255, MAP_SIZE);
 
-  // shm_id = shmget(IPC_PRIVATE, MAP_SIZE, 
-  //                 IPC_CREAT | IPC_EXCL | 0600);
-
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (5000) * sizeof(u64) * 3, 
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (1 << 10) * sizeof(u64) * 3, 
                   IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
@@ -1393,12 +1390,12 @@ EXP_ST void setup_shm(void) {
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
 
   gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
-  gep_index_min_ptr = gep_size_ptr + (5000);
-  gep_index_max_ptr = gep_index_min_ptr + (5000);
+  gep_index_min_ptr = gep_size_ptr + (1 << 10);
+  gep_index_max_ptr = gep_index_min_ptr + (1 << 10);
+
+  memset(gep_size_ptr, 0, (1 << 10) * sizeof(u64) * 3);
 
   if (!gep_size_ptr || !gep_index_min_ptr || !gep_index_max_ptr) PFATAL("shmat() failed");
-
-  memset(gep_size_ptr, 0, (5000) * sizeof(u64) * 3);
 }
 
 
@@ -2305,7 +2302,7 @@ static u8 run_target(char** argv, u32 timeout) {
 
   memset(trace_bits, 0, MAP_SIZE);
 
-  /* Reset gep_index_max_ptr[0] and [1] to 0 */
+  /* Reset counter */
   memset(gep_index_max_ptr, 0, sizeof(u64) * 2);
   memset(gep_index_min_ptr, 0, sizeof(u64));
 
@@ -3198,6 +3195,10 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   s32 fd;
   u8  keeping = 0, res;
 
+  // 1. 如果程序没有超时或者ERROR或者发现Crash，正常情况下，fault是等于0的
+  // 一般情况下，也是没有打开crash_mode的，所以这里会进入
+  // 2. 还有一种情况会进入，就是开了crash_mode = FAULT_CRASH == 2, 然后发现了, 正好对应开了crash_mode
+  // 正好可以进来
   if (fault == crash_mode) {
 
     /* Keep only if there are new bits in the map, add to queue for

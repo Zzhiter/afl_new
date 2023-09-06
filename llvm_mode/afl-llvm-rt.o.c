@@ -1,20 +1,4 @@
 /*
-  Copyright 2015 Google LLC All rights reserved.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at:
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-*/
-
-/*
    american fuzzy lop - LLVM instrumentation bootstrap
    ---------------------------------------------------
 
@@ -23,10 +7,18 @@
 
    LLVM integration design comes from Laszlo Szekeres.
 
+   Copyright 2015, 2016 Google Inc. All rights reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at:
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
    This code is the rewrite of afl-as.h's main_payload.
+
 */
 
-#include "../android-ashmem.h"
 #include "../config.h"
 #include "../types.h"
 
@@ -60,16 +52,21 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
-uint64_t __afl_gep_index_min_initial[5000];
+uint64_t __afl_gep_index_min_initial[1 << 10];
 uint64_t *__afl_gep_index_min = __afl_gep_index_min_initial;
 
-uint64_t __afl_gep_index_max_initial[5000];
+uint64_t __afl_gep_index_max_initial[1 << 10];
 uint64_t *__afl_gep_index_max = __afl_gep_index_max_initial;
 
-uint64_t __afl_gep_size_initial[5000];
+uint64_t __afl_gep_size_initial[1 << 10];
 uint64_t * __afl_gep_size_ptr = __afl_gep_size_initial;
 
 __thread u32 __afl_prev_loc;
+
+
+/* Running in persistent mode? */
+
+static u8 is_persistent;
 
 void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
 {
@@ -87,20 +84,16 @@ void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
    if (index > __afl_gep_index_max[id]) {
       __afl_gep_index_max[id] = index;
       __afl_gep_index_max[0] ++;
-      if (_size - index < 10) {
+      if (_size - index < _size / 10) {
         __afl_gep_index_max[1] ++;
       }
    }
+  //  printf("id is %lu\n", id);
   //  printf("size is %lu\n", __afl_gep_size_ptr[id]);
   //  printf("index is %lu\n", index);
   //  printf("__afl_gep_index_min is %lu\n", __afl_gep_index_min[id]);
   //  printf("__afl_gep_index_max is %lu\n", __afl_gep_index_max[id]);
 }
-
-
-/* Running in persistent mode? */
-
-static u8 is_persistent;
 
 
 /* SHM setup. */
@@ -130,9 +123,8 @@ static void __afl_map_shm(void) {
 
     // set pointer after trace_bits
     __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];
-    __afl_gep_index_min = &__afl_gep_size_ptr[5000];
-    __afl_gep_index_max = &__afl_gep_index_min[5000];
-
+    __afl_gep_index_min = &__afl_gep_size_ptr[1 << 10];
+    __afl_gep_index_max = &__afl_gep_index_min[1 << 10];
   }
 
 }

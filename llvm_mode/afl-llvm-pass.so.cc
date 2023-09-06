@@ -1,20 +1,4 @@
 /*
-  Copyright 2015 Google LLC All rights reserved.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at:
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-*/
-
-/*
    american fuzzy lop - LLVM-mode instrumentation pass
    ---------------------------------------------------
 
@@ -24,10 +8,19 @@
    LLVM integration design comes from Laszlo Szekeres. C bits copied-and-pasted
    from afl-as.c are Michal's fault.
 
+   Copyright 2015, 2016 Google Inc. All rights reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at:
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
    This library is plugged into LLVM when invoking clang through afl-clang-fast.
    It tells the compiler to add code roughly equivalent to the bits discussed
    in ../afl-as.h.
-*/
+
+ */
 
 #define AFL_LLVM_PASS
 
@@ -435,7 +428,7 @@ bool AFLCoverage::runOnModule(Module &M)
             {
               if (!dyn_cast<ConstantInt>(GEP->getOperand(2)))
               {
-                errs() << "Find a variable stack GEP! \n";
+                // errs() << "Find a variable stack GEP! \n";
 
                 IRBuilder<> IRB(&Inst);
                 
@@ -536,7 +529,7 @@ bool AFLCoverage::runOnModule(Module &M)
               // 否则，就是内存访问操作了，寻找访存偏移是变量的
               else if (!dyn_cast<ConstantInt>(GEP->getOperand(1)))
               {
-                errs() << "Find a variable heap GEP! \n";
+                // errs() << "Find a variable heap GEP! \n";
 
                 IRBuilder<> IRB(&Inst);
 
@@ -570,6 +563,7 @@ bool AFLCoverage::runOnModule(Module &M)
 
                     insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
                     inst_afl_compare ++;
+                    errs() << "1111\n";
                   }
                   // 访存大小是变量
                   else if (ptrMapVar.count(ptrValueInst) && ptrMapVar[ptrValueInst])
@@ -580,7 +574,7 @@ bool AFLCoverage::runOnModule(Module &M)
                   // 要么就是被存到Var的Map，但是咱们这也考虑一下错误的程序的情况
                   else
                   {
-                    errs() << "3333\n";
+                    errs() << "3333" << ptrMapConst.count(ptrValueInst) << " " << ptrMapConst[ptrValueInst] << "\n";
                     continue;
                   }
                 }
@@ -606,6 +600,7 @@ bool AFLCoverage::runOnModule(Module &M)
 
                   insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
                   inst_afl_compare ++;
+                  errs() << "4444\n";
                 }
               }
             }
