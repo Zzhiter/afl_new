@@ -70,6 +70,9 @@ namespace
     void insertAflCompare(IRBuilder<> &IRB, Value *curId,
                           Value *arraySize, Value *index, LLVMContext &C, Module &M, Function *compareFunc);
 
+    void insertAflGepStatus(IRBuilder<> &IRB, Value *curId,
+                            Value *index, LLVMContext &C, Module &M, Function *gepStatusFunc);
+
     // StringRef getPassName() const override {
     //  return "American Fuzzy Lop Instrumentation";
     // }
@@ -125,6 +128,16 @@ void AFLCoverage::insertAflCompare(IRBuilder<> &IRB, Value *curId,
   IRB.CreateCall(compareFunc, {compareFuncArgID,
                                compareFuncArgSize,
                                compareFuncArgIndex});
+}
+
+void AFLCoverage::insertAflGepStatus(IRBuilder<> &IRB, Value *curId,
+                                     Value *index, LLVMContext &C, Module &M, Function *gepStatusFunc)
+{
+  Value *compareFuncArgID = {curId};
+  Value *compareFuncArgIndex = {index};
+  IRB.CreateCall(gepStatusFunc, {compareFuncArgID,
+                                 compareFuncArgIndex});
+  errs() << "成功插装！\n";
 }
 
 bool AFLCoverage::runOnModule(Module &M)
@@ -183,13 +196,22 @@ bool AFLCoverage::runOnModule(Module &M)
   DenseMap<Instruction *, uint64_t> ptrMapConst;
   DenseMap<Instruction *, Instruction *> ptrMapVar;
 
-  FunctionType *compareFuncType = FunctionType::get(
+  // FunctionType *compareFuncType = FunctionType::get(
+  //     Type::getVoidTy(C),                                              // return type
+  //     {Type::getInt64Ty(C), Type::getInt64Ty(C), Type::getInt64Ty(C)}, // argument types
+  //     false                                                            // variadic function
+  // );
+  // Function *compareFunc = Function::Create(
+  //     compareFuncType, GlobalValue::ExternalLinkage, "__afl_compare", &M);
+
+  FunctionType *gepStatusFuncType = FunctionType::get(
       Type::getVoidTy(C),                                              // return type
-      {Type::getInt64Ty(C), Type::getInt64Ty(C), Type::getInt64Ty(C)}, // argument types
+      {Type::getInt64Ty(C), Type::getInt64Ty(C)}, // argument types
       false                                                            // variadic function
   );
-  Function *compareFunc = Function::Create(
-      compareFuncType, GlobalValue::ExternalLinkage, "__afl_compare", &M);
+  Function *gepStatusFunc = Function::Create(
+      gepStatusFuncType, GlobalValue::ExternalLinkage, "__afl_gep_status", &M);
+
 
   /* 扫描所有的全局变量 */
 
@@ -436,180 +458,181 @@ bool AFLCoverage::runOnModule(Module &M)
                 IRBuilder<> IRB(&Inst);
                 
                 // if the source type is not array type, continue
-                const Type *GepSourceType = GEP->getSourceElementType();
-                if (!ArrayType::classof(GepSourceType))
+                const Type *gepSourceType = GEP->getSourceElementType();
+                if (!ArrayType::classof(gepSourceType))
                   continue;
 
-                uint64_t array_size = GepSourceType->getArrayNumElements();
+                uint64_t array_size = gepSourceType->getArrayNumElements();
                 ConstantInt *arraySize = ConstantInt::get(Int64Ty, array_size);
 
                 uint64_t cur_id = id ++;
                 ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
               
-                /* call compare function */
+                // /* call compare function */
+                // insertAflCompare(IRB, CurId,
+                //                  arraySize, GEP->getOperand(2), C, M, compareFunc);
 
-                insertAflCompare(IRB, CurId,
-                                 arraySize, GEP->getOperand(2), C, M, compareFunc);
-                
+                insertAflGepStatus(IRB, CurId,
+                                   GEP->getOperand(2), C, M, gepStatusFunc);
+    
                 inst_afl_compare ++;
-
-                errs() << "0000\n";
+                errs() << array_size << " 0000\n";
               }
             }
           }
 
-          // 指针访问（包含堆变量）
-          else if (GEP->getOperand(0)->getType()->isPointerTy())
-          {
-            // errs() << "指针访问！\n";
-            // %27 = getelementptr inbounds i32, i32* %24, i64 %26
-            // 如果是通过指针访问变量，那么%24这个位置的变量，应该是指针类型
-            // %26这个位置的变量，应该是个变量
-            // 像%31 = getelementptr inbounds i32, i32* %30, i64 5这种，就应该被剔除
-            if (GEP->getNumOperands() == 2)
-            {
-              // 获取指针
-              Value *ptrValue = GEP->getOperand(0);
-              // 获取指针指向元素的类型
-              Type *elementType = ptrValue->getType()->getPointerElementType();
-              // 获取指针指向类型的大小
-              int elementSize = getPointerType(ptrValue);
-              // errs() << elementSize << '\n';
+          // // 指针访问（包含堆变量）
+          // else if (GEP->getOperand(0)->getType()->isPointerTy())
+          // {
+          //   // errs() << "指针访问！\n";
+          //   // %27 = getelementptr inbounds i32, i32* %24, i64 %26
+          //   // 如果是通过指针访问变量，那么%24这个位置的变量，应该是指针类型
+          //   // %26这个位置的变量，应该是个变量
+          //   // 像%31 = getelementptr inbounds i32, i32* %30, i64 5这种，就应该被剔除
+          //   if (GEP->getNumOperands() == 2)
+          //   {
+          //     // 获取指针
+          //     Value *ptrValue = GEP->getOperand(0);
+          //     // 获取指针指向元素的类型
+          //     Type *elementType = ptrValue->getType()->getPointerElementType();
+          //     // 获取指针指向类型的大小
+          //     int elementSize = getPointerType(ptrValue);
+          //     // errs() << elementSize << '\n';
 
-              // 获取gep的下一条指令
-              Instruction *nextInst = GEP->getNextNode();
+          //     // 获取gep的下一条指令
+          //     Instruction *nextInst = GEP->getNextNode();
 
-              // 如果下一条指令是store，并且store的第一个操作数是指针，第二个操作数是指针的指针，
-              // 则是指针运算之后的赋值
-              // %27 = load i32*, i32** %6, align 8
-              // %28 = getelementptr inbounds i32, i32* %27, i64 200
-              // store i32* %28, i32** %11, align 8
-              StoreInst *storeInst = dyn_cast<StoreInst>(nextInst);
-              PointerType *valPtrType = nullptr;
-              PointerType *destPtrType = nullptr;
-              if (storeInst)
-              {
-                valPtrType = dyn_cast<PointerType>(storeInst->getValueOperand()->getType());
-                destPtrType = dyn_cast<PointerType>(storeInst->getPointerOperand()->getType());
-              }
+          //     // 如果下一条指令是store，并且store的第一个操作数是指针，第二个操作数是指针的指针，
+          //     // 则是指针运算之后的赋值
+          //     // %27 = load i32*, i32** %6, align 8
+          //     // %28 = getelementptr inbounds i32, i32* %27, i64 200
+          //     // store i32* %28, i32** %11, align 8
+          //     StoreInst *storeInst = dyn_cast<StoreInst>(nextInst);
+          //     PointerType *valPtrType = nullptr;
+          //     PointerType *destPtrType = nullptr;
+          //     if (storeInst)
+          //     {
+          //       valPtrType = dyn_cast<PointerType>(storeInst->getValueOperand()->getType());
+          //       destPtrType = dyn_cast<PointerType>(storeInst->getPointerOperand()->getType());
+          //     }
 
-              // if (!valPtrType || !destPtrType) 
-              //   continue;
+          //     // if (!valPtrType || !destPtrType) 
+          //     //   continue;
 
-              if (valPtrType && destPtrType && isPointerPointer(storeInst->getPointerOperand()))
-              {
-                // 获取200
-                if (auto *offset = dyn_cast<ConstantInt>(GEP->getOperand(1)))
-                {
-                  // 获取到gep操作的原始的ptr
-                  Value *originPtrValue = getGepOriginalPtr(&Inst);
-                  if (!originPtrValue) 
-                    continue;
+          //     if (valPtrType && destPtrType && isPointerPointer(storeInst->getPointerOperand()))
+          //     {
+          //       // 获取200
+          //       if (auto *offset = dyn_cast<ConstantInt>(GEP->getOperand(1)))
+          //       {
+          //         // 获取到gep操作的原始的ptr
+          //         Value *originPtrValue = getGepOriginalPtr(&Inst);
+          //         if (!originPtrValue) 
+          //           continue;
 
-                  Instruction *originPtr = dyn_cast<Instruction>(originPtrValue);
+          //         Instruction *originPtr = dyn_cast<Instruction>(originPtrValue);
 
-                  if (!originPtr)
-                    continue;
+          //         if (!originPtr)
+          //           continue;
 
-                  // errs() << ptrMapConst.count(originPtr) << '\n';
-                  // 去map里面获取指针对应的size，可能是常量，也可能是变量
-                  if (ptrMapConst.count(originPtr) && ptrMapConst[originPtr])
-                  {
-                    uint64_t arrayByteSize = ptrMapConst[originPtr];
-                    ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayByteSize / elementSize);
-                    // 更新%11的访存大小
-                    // 1. 首先获取到%11
-                    Instruction *destPtr = dyn_cast<Instruction>(storeInst->getPointerOperand());
-                    // 2. 更新map里对应的value
-                    // 有没有可能这里减完小于0了，其实也可以加个判断
-                    ptrMapConst[destPtr] = (arrayByteSize - elementSize * offset->getZExtValue());
-                    // errs() << ptrMapConst[destPtr] << "xixi\n";
-                  }
-                  // 访存大小是变量的情况先跳过不处理
-                  else
-                    continue;
-                }
-              }
+          //         // errs() << ptrMapConst.count(originPtr) << '\n';
+          //         // 去map里面获取指针对应的size，可能是常量，也可能是变量
+          //         if (ptrMapConst.count(originPtr) && ptrMapConst[originPtr])
+          //         {
+          //           uint64_t arrayByteSize = ptrMapConst[originPtr];
+          //           ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayByteSize / elementSize);
+          //           // 更新%11的访存大小
+          //           // 1. 首先获取到%11
+          //           Instruction *destPtr = dyn_cast<Instruction>(storeInst->getPointerOperand());
+          //           // 2. 更新map里对应的value
+          //           // 有没有可能这里减完小于0了，其实也可以加个判断
+          //           ptrMapConst[destPtr] = (arrayByteSize - elementSize * offset->getZExtValue());
+          //           // errs() << ptrMapConst[destPtr] << "xixi\n";
+          //         }
+          //         // 访存大小是变量的情况先跳过不处理
+          //         else
+          //           continue;
+          //       }
+          //     }
 
-              // 否则，就是内存访问操作了，寻找访存偏移是变量的
-              else if (!dyn_cast<ConstantInt>(GEP->getOperand(1)))
-              {
-                // errs() << "Find a variable heap GEP! \n";
+          //     // 否则，就是内存访问操作了，寻找访存偏移是变量的
+          //     else if (!dyn_cast<ConstantInt>(GEP->getOperand(1)))
+          //     {
+          //       // errs() << "Find a variable heap GEP! \n";
 
-                IRBuilder<> IRB(&Inst);
+          //       IRBuilder<> IRB(&Inst);
 
-                // 正常的指针访问
-                // int *ptr3 = (int *)malloc(40 * sizeof(int));
-                // ptr3[i] = 6;
-                // 对应IR：
-                //   %10 = call noalias i8* @malloc(i64 160) #3
-                //   %11 = bitcast i8* %10 to i32*
-                //   store i32* %11, i32** %6, align 8
-                //   %12 = load i32*, i32** %6, align 8
-                //   %13 = load i32, i32* %3, align 4
-                //   %14 = sext i32 %13 to i64
-                //   %15 = getelementptr inbounds i32, i32* %12, i64 %14
-                //   store i32 6, i32* %15, align 4
-                if (auto *loadPtrInst = dyn_cast<LoadInst>(ptrValue))
-                {
-                  Value *ptrValue = loadPtrInst->getPointerOperand();
-                  if (!ptrValue)
-                    continue;
+          //       // 正常的指针访问
+          //       // int *ptr3 = (int *)malloc(40 * sizeof(int));
+          //       // ptr3[i] = 6;
+          //       // 对应IR：
+          //       //   %10 = call noalias i8* @malloc(i64 160) #3
+          //       //   %11 = bitcast i8* %10 to i32*
+          //       //   store i32* %11, i32** %6, align 8
+          //       //   %12 = load i32*, i32** %6, align 8
+          //       //   %13 = load i32, i32* %3, align 4
+          //       //   %14 = sext i32 %13 to i64
+          //       //   %15 = getelementptr inbounds i32, i32* %12, i64 %14
+          //       //   store i32 6, i32* %15, align 4
+          //       if (auto *loadPtrInst = dyn_cast<LoadInst>(ptrValue))
+          //       {
+          //         Value *ptrValue = loadPtrInst->getPointerOperand();
+          //         if (!ptrValue)
+          //           continue;
 
-                  Instruction *ptrValueInst = dyn_cast<Instruction>(ptrValue);
+          //         Instruction *ptrValueInst = dyn_cast<Instruction>(ptrValue);
 
-                  // 去map里面获取指针对应的size，可能是常量，也可能是变量
-                  if (ptrMapConst.count(ptrValueInst) && ptrMapConst[ptrValueInst])
-                  {
-                    uint64_t arrayByteSize = ptrMapConst[ptrValueInst];
-                    ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayByteSize / elementSize);
-                    uint64_t cur_id = id++;
-                    ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
+          //         // 去map里面获取指针对应的size，可能是常量，也可能是变量
+          //         if (ptrMapConst.count(ptrValueInst) && ptrMapConst[ptrValueInst])
+          //         {
+          //           uint64_t arrayByteSize = ptrMapConst[ptrValueInst];
+          //           ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayByteSize / elementSize);
+          //           uint64_t cur_id = id++;
+          //           ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
 
-                    insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
-                    inst_afl_compare ++;
-                    errs() << "1111\n";
-                  }
-                  // 访存大小是变量
-                  else if (ptrMapVar.count(ptrValueInst) && ptrMapVar[ptrValueInst])
-                  {
-                    errs() << "2222\n";
-                  }
-                  // 按理来说，永远不会出现这种情况，因为正确的程序，指针要么被存到Const的Map
-                  // 要么就是被存到Var的Map，但是咱们这也考虑一下错误的程序的情况
-                  else
-                  {
-                    errs() << "3333" << ptrMapConst.count(ptrValueInst) << " " << ptrMapConst[ptrValueInst] << "\n";
-                    continue;
-                  }
-                }
-                // 通过指针访问数组元素
-                // int a[10];
-                // int f = *(a + i);
-                // 对应IR：
-                // %8 = getelementptr inbounds [10 x i32], [10 x i32]* %5, i32 0, i32 0
-                // %9 = load i32, i32* %3, align 4
-                // %10 = sext i32 %9 to i64
-                // %11 = getelementptr inbounds i32, i32* %8, i64 %10
-                else if (auto *gepPtrInst = dyn_cast<GetElementPtrInst>(ptrValue))
-                {
-                  // if the source type is not array type, continue
-                  const Type *gepSourceType = gepPtrInst->getSourceElementType();
-                  if (!ArrayType::classof(gepSourceType))
-                    continue;
+          //           insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
+          //           inst_afl_compare ++;
+          //           errs() << "1111\n";
+          //         }
+          //         // 访存大小是变量
+          //         else if (ptrMapVar.count(ptrValueInst) && ptrMapVar[ptrValueInst])
+          //         {
+          //           errs() << "2222\n";
+          //         }
+          //         // 按理来说，永远不会出现这种情况，因为正确的程序，指针要么被存到Const的Map
+          //         // 要么就是被存到Var的Map，但是咱们这也考虑一下错误的程序的情况
+          //         else
+          //         {
+          //           errs() << "3333" << ptrMapConst.count(ptrValueInst) << " " << ptrMapConst[ptrValueInst] << "\n";
+          //           continue;
+          //         }
+          //       }
+          //       // 通过指针访问数组元素
+          //       // int a[10];
+          //       // int f = *(a + i);
+          //       // 对应IR：
+          //       // %8 = getelementptr inbounds [10 x i32], [10 x i32]* %5, i32 0, i32 0
+          //       // %9 = load i32, i32* %3, align 4
+          //       // %10 = sext i32 %9 to i64
+          //       // %11 = getelementptr inbounds i32, i32* %8, i64 %10
+          //       else if (auto *gepPtrInst = dyn_cast<GetElementPtrInst>(ptrValue))
+          //       {
+          //         // if the source type is not array type, continue
+          //         const Type *gepSourceType = gepPtrInst->getSourceElementType();
+          //         if (!ArrayType::classof(gepSourceType))
+          //           continue;
 
-                  uint64_t arrayNumElements = gepSourceType->getArrayNumElements();
-                  ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayNumElements);
-                  uint64_t cur_id = id++;
-                  ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
+          //         uint64_t arrayNumElements = gepSourceType->getArrayNumElements();
+          //         ConstantInt *arraySize = ConstantInt::get(Int64Ty, arrayNumElements);
+          //         uint64_t cur_id = id++;
+          //         ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
 
-                  insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
-                  inst_afl_compare ++;
-                  errs() << "4444\n";
-                }
-              }
-            }
-          }
+          //         insertAflCompare(IRB, CurId, arraySize, GEP->getOperand(1), C, M, compareFunc);
+          //         inst_afl_compare ++;
+          //         errs() << "4444\n";
+          //       }
+          //     }
+          //   }
+          // }
         }
       }
     }

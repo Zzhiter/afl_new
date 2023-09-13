@@ -52,14 +52,18 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
-uint64_t __afl_gep_index_min_initial[1 << 10];
-uint64_t *__afl_gep_index_min = __afl_gep_index_min_initial;
+u64* __afl_gep_new_status_cnt;
+u8 __afl_gep_status_initial[2000 * 2000];
+u8* __afl_gep_status_ptr = __afl_gep_status_initial;
 
-uint64_t __afl_gep_index_max_initial[1 << 10];
-uint64_t *__afl_gep_index_max = __afl_gep_index_max_initial;
+// uint64_t __afl_gep_index_min_initial[1 << 10];
+// uint64_t *__afl_gep_index_min = __afl_gep_index_min_initial;
 
-uint64_t __afl_gep_size_initial[1 << 10];
-uint64_t * __afl_gep_size_ptr = __afl_gep_size_initial;
+// uint64_t __afl_gep_index_max_initial[1 << 10];
+// uint64_t *__afl_gep_index_max = __afl_gep_index_max_initial;
+
+// uint64_t __afl_gep_size_initial[1 << 10];
+// uint64_t * __afl_gep_size_ptr = __afl_gep_size_initial;
 
 __thread u32 __afl_prev_loc;
 
@@ -68,32 +72,41 @@ __thread u32 __afl_prev_loc;
 
 static u8 is_persistent;
 
-void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
-{
-  //  printf("id is %lu\n", id);
-   // if (1 < 2) {
-   //    printf("jaja\n");
-   // }
+void __afl_gep_status(uint64_t id, uint64_t index) {
+  if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
+    __afl_gep_status_ptr[id * 2000 + index] = 1;
+    (*__afl_gep_new_status_cnt) ++;
+  }
 
-   __afl_gep_size_ptr[id] = _size;
-
-   if (index < __afl_gep_index_min[id]) {
-      __afl_gep_index_min[id] = index;
-      __afl_gep_index_min[0] ++;
-   } 
-   if (index > __afl_gep_index_max[id]) {
-      __afl_gep_index_max[id] = index;
-      __afl_gep_index_max[0] ++;
-      if (_size - index < _size / 10) {
-        __afl_gep_index_max[1] ++;
-      }
-   }
-  //  printf("id is %lu\n", id);
-  //  printf("size is %lu\n", __afl_gep_size_ptr[id]);
-  //  printf("index is %lu\n", index);
-  //  printf("__afl_gep_index_min is %lu\n", __afl_gep_index_min[id]);
-  //  printf("__afl_gep_index_max is %lu\n", __afl_gep_index_max[id]);
+  // printf("xxx%d\n", __afl_gep_status_ptr[id * 2000 + index]);
 }
+
+// void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
+// {
+//   //  printf("id is %lu\n", id);
+//    // if (1 < 2) {
+//    //    printf("jaja\n");
+//    // }
+
+//    __afl_gep_size_ptr[id] = _size;
+
+//    if (index < __afl_gep_index_min[id]) {
+//       __afl_gep_index_min[id] = index;
+//       __afl_gep_index_min[0] ++;
+//    } 
+//    if (index > __afl_gep_index_max[id]) {
+//       __afl_gep_index_max[id] = index;
+//       __afl_gep_index_max[0] ++;
+//       if (_size - index < _size / 10) {
+//         __afl_gep_index_max[1] ++;
+//       }
+//    }
+//   //  printf("id is %lu\n", id);
+//   //  printf("size is %lu\n", __afl_gep_size_ptr[id]);
+//   //  printf("index is %lu\n", index);
+//   //  printf("__afl_gep_index_min is %lu\n", __afl_gep_index_min[id]);
+//   //  printf("__afl_gep_index_max is %lu\n", __afl_gep_index_max[id]);
+// }
 
 
 /* SHM setup. */
@@ -121,10 +134,13 @@ static void __afl_map_shm(void) {
 
     __afl_area_ptr[0] = 1;
 
-    // set pointer after trace_bits
-    __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];
-    __afl_gep_index_min = &__afl_gep_size_ptr[1 << 10];
-    __afl_gep_index_max = &__afl_gep_index_min[1 << 10];
+    __afl_gep_new_status_cnt = (u64*)&__afl_area_ptr[MAP_SIZE];
+    __afl_gep_status_ptr = (u8*)(__afl_gep_new_status_cnt + sizeof(u64));
+
+    // // set pointer after trace_bits
+    // __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];
+    // __afl_gep_index_min = &__afl_gep_size_ptr[1 << 10];
+    // __afl_gep_index_max = &__afl_gep_index_min[1 << 10];
   }
 
 }

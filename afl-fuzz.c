@@ -146,9 +146,11 @@ static s32 forksrv_pid,               /* PID of the fork server           */
            out_dir_fd = -1;           /* FD of the lock file              */
 
 EXP_ST u8* trace_bits;                /* SHM with instrumentation bitmap  */
-EXP_ST u64* gep_size_ptr;             /* SHM with gep size */
-EXP_ST u64* gep_index_min_ptr;        /* SHM with gep min index */
-EXP_ST u64* gep_index_max_ptr;        /* SHM with gep max index */
+// EXP_ST u64* gep_size_ptr;             /* SHM with gep size */
+// EXP_ST u64* gep_index_min_ptr;        /* SHM with gep min index */
+// EXP_ST u64* gep_index_max_ptr;        /* SHM with gep max index */
+EXP_ST u64* gep_new_status_cnt;
+EXP_ST u8* gep_status_ptr;
 
 EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
            virgin_tmout[MAP_SIZE],    /* Bits we haven't seen in tmouts   */
@@ -198,8 +200,9 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            bytes_trim_out,            /* Bytes coming outa the trimmer    */
            blocks_eff_total,          /* Blocks subject to effector maps  */
            blocks_eff_select,         /* Blocks selected as fuzzable      */
-           total_gep_index_max_cnt,   /* Total count of hit gep max cnt */
-           total_gep_threshold_cnt;   /* Total count of hit gep threshold cnt */
+          //  total_gep_index_max_cnt,   /* Total count of hit gep max cnt */
+          //  total_gep_threshold_cnt;   /* Total count of hit gep threshold cnt */
+           total_hit_new_gep_status;
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -253,11 +256,13 @@ struct queue_entry {
       var_behavior,                   /* Variable behavior?               */
       favored,                        /* Currently favored?               */
       fs_redundant,                  /* Marked as redundant in the fs?   */
-      is_hit_gep_threshold;           /* If this case hit gep threshold */
+      // is_hit_gep_threshold;           /* If this case hit gep threshold */
+      is_hot;
 
   u32 bitmap_size,                    /* Number of bits set in bitmap     */
       exec_cksum,                     /* Checksum of the execution trace  */
-      gep_index_max_cnt;              /* Count of trigger gep index max */
+      // gep_index_max_cnt;              /* Count of trigger gep index max */
+      gep_new_status_cnt;
 
   u64 exec_us,                        /* Execution time (us)              */
       handicap,                       /* Number of queue cycles behind    */
@@ -1367,7 +1372,9 @@ EXP_ST void setup_shm(void) {
   memset(virgin_tmout, 255, MAP_SIZE);
   memset(virgin_crash, 255, MAP_SIZE);
 
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (1 << 10) * sizeof(u64) * 3, 
+  // shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (1 << 10) * sizeof(u64) * 3, 
+  //                 IPC_CREAT | IPC_EXCL | 0600);
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + sizeof(u64) + sizeof(u8) * 2000 * 2000, 
                   IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
@@ -1389,13 +1396,18 @@ EXP_ST void setup_shm(void) {
   
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
 
-  gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
-  gep_index_min_ptr = gep_size_ptr + (1 << 10);
-  gep_index_max_ptr = gep_index_min_ptr + (1 << 10);
+  gep_new_status_cnt = (u64*)(trace_bits + MAP_SIZE);
+  gep_status_ptr = (u8*)(gep_new_status_cnt + sizeof(u64));
+  
+  memset(gep_new_status_cnt, 0, sizeof(u64) + sizeof(u8) * 2000 * 2000);
 
-  memset(gep_size_ptr, 0, (1 << 10) * sizeof(u64) * 3);
+  // gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
+  // gep_index_min_ptr = gep_size_ptr + (1 << 10);
+  // gep_index_max_ptr = gep_index_min_ptr + (1 << 10);
 
-  if (!gep_size_ptr || !gep_index_min_ptr || !gep_index_max_ptr) PFATAL("shmat() failed");
+  // memset(gep_size_ptr, 0, (1 << 10) * sizeof(u64) * 3);
+
+  // if (!gep_size_ptr || !gep_index_min_ptr || !gep_index_max_ptr) PFATAL("shmat() failed");
 }
 
 
@@ -2302,9 +2314,12 @@ static u8 run_target(char** argv, u32 timeout) {
 
   memset(trace_bits, 0, MAP_SIZE);
 
-  /* Reset counter */
-  memset(gep_index_max_ptr, 0, sizeof(u64) * 2);
-  memset(gep_index_min_ptr, 0, sizeof(u64));
+  // /* Reset counter */
+  // memset(gep_index_max_ptr, 0, sizeof(u64) * 2);
+  // memset(gep_index_min_ptr, 0, sizeof(u64));
+
+  memset(gep_new_status_cnt, 0, sizeof(u64));
+  // *gep_new_status_cnt = 999;
 
   MEM_BARRIER();
 
@@ -2667,9 +2682,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
     }
 
-    if (gep_index_max_ptr[0]) {
-      max_of_gep_index_max_ptr = MAX(max_of_gep_index_max_ptr, gep_index_max_ptr[0]);
-    }
+    // if (gep_index_max_ptr[0]) {
+    //   max_of_gep_index_max_ptr = MAX(max_of_gep_index_max_ptr, gep_index_max_ptr[0]);
+    // }
   }
 
   stop_us = get_cur_time_us();
@@ -2684,7 +2699,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
   q->bitmap_size = count_bytes(trace_bits);
   q->handicap    = handicap;
   q->cal_failed  = 0;
-  q->gep_index_max_cnt = max_of_gep_index_max_ptr;
+  // q->gep_index_max_cnt = max_of_gep_index_max_ptr;
 
   total_bitmap_size += q->bitmap_size;
   total_bitmap_entries++;
@@ -3162,24 +3177,37 @@ static void write_crash_readme(void) {
 
 }
 
-static inline int has_new_gep_max() {
-    // 这个不需要了。
-  // u32 mem_cksum = hash32(gep_index_max_ptr, 1 << 10, HASH_CONST);
-  if (gep_index_max_ptr[0] > 0) {
-    total_gep_index_max_cnt ++;
+// static inline int has_new_gep_max() {
+//     // 这个不需要了。
+//   // u32 mem_cksum = hash32(gep_index_max_ptr, 1 << 10, HASH_CONST);
+//   if (gep_index_max_ptr[0] > 0) {
+//     total_gep_index_max_cnt ++;
     
-    // 到达了9/10的界限
-    if (gep_index_max_ptr[1] > 0) 
-    {
-      total_gep_threshold_cnt ++;
-      return 2;
+//     // 到达了9/10的界限
+//     if (gep_index_max_ptr[1] > 0) 
+//     {
+//       total_gep_threshold_cnt ++;
+//       return 2;
 
-    }
+//     }
       
-    // hit了新的gep max
-    return 1; 
-  } 
+//     // hit了新的gep max
+//     return 1; 
+//   } 
 
+//   return 0;
+// }
+
+static inline int has_new_gep_status() {
+  if (*gep_new_status_cnt > 0) {
+    total_hit_new_gep_status ++;
+    if (*gep_new_status_cnt > 10) {
+      return 2;
+    }
+
+    return 1;
+  }
+  
   return 0;
 }
 
@@ -3191,7 +3219,8 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
   u8  *fn = "";
   u8  hnb;
-  u8  hngm = 0;
+  // u8  hngm = 0;
+  u8 hngs = 0;
   s32 fd;
   u8  keeping = 0, res;
 
@@ -3204,7 +3233,11 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
 
-    if ((!(hnb = has_new_bits(virgin_bits))) && (!(hngm = has_new_gep_max()))) {
+    if (
+      (!(hnb = has_new_bits(virgin_bits))) && 
+      // (!(hngm = has_new_gep_max()))
+        (!(hngs = has_new_gep_status()))
+      ) {
       if (crash_mode) total_crashes++;
       return 0;
     }    
@@ -3227,12 +3260,20 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
       queued_with_cov++;
     }
 
-    if (hngm == 1) {
-      queue_top->gep_index_max_cnt = gep_index_max_ptr[0];
+    // if (hngm == 1) {
+    //   queue_top->gep_index_max_cnt = gep_index_max_ptr[0];
+    // }
+
+    // if (hngm == 2) {
+    //   queue_top->is_hit_gep_threshold = 1;
+    // }
+
+    if (hngs == 1) {
+      queue_top->gep_new_status_cnt = *gep_new_status_cnt;
     }
 
-    if (hngm == 2) {
-      queue_top->is_hit_gep_threshold = 1;
+    if (hngs == 2) {
+      queue_top->is_hot = 1;
     }
 
     queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
@@ -4220,12 +4261,18 @@ static void show_stats(void) {
 
   /* Our gep states */
 
-  sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
+  sprintf(tmp, "%s ", DI(total_hit_new_gep_status));
+  // sprintf(tmp, "%s ", DI(*gep_new_status_cnt));
+  // sprintf(tmp, "%s ", DI((u64)(*gep_status_ptr)));
+  
+
+  // sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
   // sprintf(tmp, "%s ", DI(gep_index_max_ptr[2]));
 
-  SAYF(bV bSTOP "total hit maxgep : " cRST "%-17s " bSTG bV, tmp);
+  SAYF(bV bSTOP "  total new gep  : " cRST "%-17s " bSTG bV, tmp);
 
-  sprintf(tmp, "%s hit",  DI(total_gep_threshold_cnt));
+
+  sprintf(tmp, "%s hit",  DI(0));
   // sprintf(tmp, "%s ", DI(gep_index_max_ptr[3]));
 
   SAYF(bSTOP "  threshold cnt : " cRST "%-21s " bSTG bV "\n", tmp);
@@ -4857,9 +4904,13 @@ static u32 calculate_score(struct queue_entry* q) {
 
   /* Our score calculate */
   
-  if (q->gep_index_max_cnt)
-  {
-    perf_score *= q->gep_index_max_cnt;
+  // if (q->gep_index_max_cnt)
+  // {
+  //   perf_score *= q->gep_index_max_cnt;
+  // }
+
+  if (q->gep_new_status_cnt) {
+    perf_score *= q->gep_new_status_cnt;
   }
 
   /* Make sure that we don't go over limit. */
@@ -5091,7 +5142,9 @@ static u8 fuzz_one(char** argv) {
     if ((queue_cur->was_fuzzed || !queue_cur->favored) &&
         UR(100) < SKIP_TO_NEW_PROB) return 1;
 
-  } else if (!dumb_mode && !queue_cur->favored && !queue_cur->is_hit_gep_threshold 
+  } else if (!dumb_mode && !queue_cur->favored && 
+            //  !queue_cur->is_hit_gep_threshold 
+             !queue_cur->is_hot
               && queued_paths > 10) {
 
     /* Otherwise, still possibly skip non-favored cases, albeit less often.
