@@ -240,14 +240,15 @@ bool AFLCoverage::runOnModule(Module &M)
                由于不知道给这个指针分配的内存大小是常量还是变量，
                因此两个map里面，先暂时都加一下
             */
-            if (ptrMapConst.count(allocate) > 0 || ptrMapVar.count(allocate))
+            if (ptrMapConst.count(&Inst) > 0 || ptrMapVar.count(&Inst))
               continue;
 
             // 默认访存大小先设置成0
-            ptrMapConst[allocate] = 0;
-            ptrMapVar[allocate] = nullptr;
+            ptrMapConst[&Inst] = 0;
+            ptrMapVar[&Inst] = nullptr;
           }
         }
+
         // 处理通过指针赋值的情况
         else if (auto *loadInst = dyn_cast<LoadInst>(&Inst))
         {
@@ -287,7 +288,7 @@ bool AFLCoverage::runOnModule(Module &M)
                 // 并且store的目的地址是指针的指针类型
                 if (isPointerPointer(pointerValue))
                 {
-                  // errs() << "指针赋值！\n";
+                  errs() << "指针赋值！\n";
 
                   // 找到=号右边变量的map，看一下访存大小是变量还是常量
                   Instruction *oldPtrInst = dyn_cast<Instruction>(loadPtr);
@@ -300,6 +301,7 @@ bool AFLCoverage::runOnModule(Module &M)
                   {
                     isConst = true;
                     size = ptrMapConst[oldPtrInst];
+                    errs() << "5555 " << size << "\n";
                   }
                   else if (ptrMapVar.count(oldPtrInst) && ptrMapVar[oldPtrInst] != nullptr)
                   {
@@ -367,6 +369,7 @@ bool AFLCoverage::runOnModule(Module &M)
                     if (ptrMapConst.count(allocaInst))
                     {
                       ptrMapConst[allocaInst] = size;
+                      errs() << "store size: " << size << "\n";
                     }
                   }
                 }
@@ -418,7 +421,7 @@ bool AFLCoverage::runOnModule(Module &M)
           // errs() << "Find a GEP! number of operands:";
           // errs() << GEP->getNumOperands() << '\n';
 
-          /* Stack and Global array variables */
+          /* 栈数组和全局数组访问 */
 
           if (GEP->getSourceElementType()->isArrayTy())
           {
@@ -449,6 +452,8 @@ bool AFLCoverage::runOnModule(Module &M)
                                  arraySize, GEP->getOperand(2), C, M, compareFunc);
                 
                 inst_afl_compare ++;
+
+                errs() << "0000\n";
               }
             }
           }
