@@ -472,8 +472,8 @@ bool AFLCoverage::runOnModule(Module &M)
                 // insertAflCompare(IRB, CurId,
                 //                  arraySize, GEP->getOperand(2), C, M, compareFunc);
 
-                insertAflGepStatus(IRB, CurId,
-                                   GEP->getOperand(2), C, M, gepStatusFunc);
+                // insertAflGepStatus(IRB, CurId,
+                //                    GEP->getOperand(2), C, M, gepStatusFunc);
     
                 inst_afl_compare ++;
                 errs() << array_size << " 0000\n";
