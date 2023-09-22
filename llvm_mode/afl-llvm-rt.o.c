@@ -73,10 +73,10 @@ __thread u32 __afl_prev_loc;
 static u8 is_persistent;
 
 void __afl_gep_status(uint64_t id, uint64_t index) {
-  if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
-    __afl_gep_status_ptr[id * 2000 + index] = 1;
-    (*__afl_gep_new_status_cnt) ++;
-  }
+  // if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
+  //   __afl_gep_status_ptr[id * 2000 + index] = 1;
+  //   (*__afl_gep_new_status_cnt) ++;
+  // }
 
   // printf("xxx%d\n", __afl_gep_status_ptr[id * 2000 + index]);
 }
