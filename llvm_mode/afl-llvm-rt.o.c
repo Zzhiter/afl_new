@@ -53,7 +53,7 @@ u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
 u64* __afl_gep_new_status_cnt;
-u8 __afl_gep_status_initial[2000 * 2000];
+u8 __afl_gep_status_initial[10000 * 2000];
 u8* __afl_gep_status_ptr = __afl_gep_status_initial;
 
 // uint64_t __afl_gep_index_min_initial[1 << 10];

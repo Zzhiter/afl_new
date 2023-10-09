@@ -446,6 +446,9 @@ bool AFLCoverage::runOnModule(Module &M)
 
           if (dyn_cast<ConstantInt>(GEP->getOperand(2)))
             continue;
+          
+          if (inst_afl_compare >= 10000) 
+            continue;
 
           IRBuilder<> IRB(&Inst);
           uint64_t cur_id = id ++;
