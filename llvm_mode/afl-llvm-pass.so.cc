@@ -215,28 +215,28 @@ bool AFLCoverage::runOnModule(Module &M)
 
   /* 扫描所有的全局变量 */
 
-  for (auto &G : M.globals())
-  {
-    if (G.isDeclaration() || G.isThreadLocal() || G.isExternallyInitialized() || llvm::GlobalValue::isExternalLinkage(G.getLinkage()))
-      continue;
+  // for (auto &G : M.globals())
+  // {
+  //   if (G.isDeclaration() || G.isThreadLocal() || G.isExternallyInitialized() || llvm::GlobalValue::isExternalLinkage(G.getLinkage()))
+  //     continue;
 
-    StringRef Name = G.getName();
-    Type *Ty = G.getType();
-    // errs() << "Global variable: " << Name << ", type: " << *Ty << "\n";
+  //   StringRef Name = G.getName();
+  //   Type *Ty = G.getType();
+  //   // errs() << "Global variable: " << Name << ", type: " << *Ty << "\n";
 
-    PointerType *ptrType = dyn_cast<PointerType>(G.getType());
-    // 如果操作数是指针的指针
-    if (ptrType->getElementType()->isPointerTy())
-    {
-      Instruction *ptrInst = dyn_cast<Instruction>(&G);
-      if (!ptrMapConst.count(ptrInst) && !ptrMapVar.count(ptrInst))
-      {
-        // 默认访存大小先设置成0
-        ptrMapConst[ptrInst] = 0;
-        ptrMapVar[ptrInst] = nullptr;
-      }
-    }
-  }
+  //   PointerType *ptrType = dyn_cast<PointerType>(G.getType());
+  //   // 如果操作数是指针的指针
+  //   if (ptrType->getElementType()->isPointerTy())
+  //   {
+  //     Instruction *ptrInst = dyn_cast<Instruction>(&G);
+  //     if (!ptrMapConst.count(ptrInst) && !ptrMapVar.count(ptrInst))
+  //     {
+  //       // 默认访存大小先设置成0
+  //       ptrMapConst[ptrInst] = 0;
+  //       ptrMapVar[ptrInst] = nullptr;
+  //     }
+  //   }
+  // }
 
   /* Our Instrument before afl's */
 
@@ -252,234 +252,257 @@ bool AFLCoverage::runOnModule(Module &M)
     {
       for (auto &Inst : BB)
       {
-        if (auto *allocate = dyn_cast<AllocaInst>(&Inst))
+        // if (auto *allocate = dyn_cast<AllocaInst>(&Inst))
+        // {
+        //   // 找到分配指针变量的
+        //   if (allocate->getAllocatedType()->isPointerTy())
+        //   {
+
+        //     /*
+        //        由于不知道给这个指针分配的内存大小是常量还是变量，
+        //        因此两个map里面，先暂时都加一下
+        //     */
+        //     if (ptrMapConst.count(&Inst) > 0 || ptrMapVar.count(&Inst))
+        //       continue;
+
+        //     // 默认访存大小先设置成0
+        //     ptrMapConst[&Inst] = 0;
+        //     ptrMapVar[&Inst] = nullptr;
+        //   }
+        // }
+
+        // // 处理通过指针赋值的情况
+        // else if (auto *loadInst = dyn_cast<LoadInst>(&Inst))
+        // {
+        //   // 判断操作数是否为指针
+        //   Value *loadPtr = loadInst->getPointerOperand();
+        //   if (!loadPtr)
+        //     continue;
+
+        //   // 进一步判断load的操作数
+        //   if (PointerType *ptrType = dyn_cast<PointerType>(loadPtr->getType()))
+        //   {
+        //     // 如果操作数是指针的指针
+        //     if (ptrType->getElementType()->isPointerTy())
+        //     {
+        //       // 双重保证，找到接下来的指令，并且在load的user list里面
+        //       // 其实不用保证也行
+        //       Instruction *nextInst = loadInst->getNextNode();
+        //       Instruction *nextnextInst = nextInst->getNextNode();
+        //       StoreInst *storeInst = nullptr;
+
+        //       if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
+        //       {
+        //         if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextnextInst))
+        //           storeInst = storeInstTemp;
+        //       }
+        //       else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
+        //       {
+        //         storeInst = storeInstTemp;
+        //       }
+
+        //       if (storeInst)
+        //       {
+        //         // 获取store的目的指针地址
+        //         Value *pointerValue = storeInst->getPointerOperand();
+        //         Instruction *pointerValueInst = dyn_cast<Instruction>(pointerValue);
+
+        //         // 并且store的目的地址是指针的指针类型
+        //         if (isPointerPointer(pointerValue))
+        //         {
+        //           errs() << "指针赋值！\n";
+
+        //           // 找到=号右边变量的map，看一下访存大小是变量还是常量
+        //           Instruction *oldPtrInst = dyn_cast<Instruction>(loadPtr);
+        //           bool isConst = false;
+        //           uint64_t size = 0;
+        //           Instruction *sizeValueInst = nullptr;
+
+        //           // 这个指针，前面一定allocte过，所以肯定在map中
+        //           if (ptrMapConst.count(oldPtrInst) && ptrMapConst[oldPtrInst] != 0)
+        //           {
+        //             isConst = true;
+        //             size = ptrMapConst[oldPtrInst];
+        //             errs() << "5555 " << size << "\n";
+        //           }
+        //           else if (ptrMapVar.count(oldPtrInst) && ptrMapVar[oldPtrInst] != nullptr)
+        //           {
+        //             sizeValueInst = ptrMapVar[oldPtrInst];
+        //           }
+
+        //           // 更新=号左边变量的访存大小
+        //           if (isConst)
+        //             // ptrMapConst[allocaInst] = size;
+        //             ptrMapConst[pointerValueInst] = size;
+        //           else
+        //             // ptrMapVar[allocaInst] = sizeValueInst;
+        //             ptrMapVar[pointerValueInst] = sizeValueInst;
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
+
+        // else if (auto *callInst = dyn_cast<CallInst>(&Inst))
+        // {
+        //   Function *function = callInst->getCalledFunction();
+
+        //   if (!function)
+        //     continue;
+
+        //   // malloc 或者 new
+        //   if ((function->getName() == "malloc") || (function->getName() == "_Znam"))
+        //   {
+        //     Value *sizeValue = callInst->getArgOperand(0);
+
+        //     // 访存大小是常量
+        //     if (ConstantInt *sizeConst = dyn_cast<ConstantInt>(sizeValue))
+        //     {
+        //       int size = sizeConst->getZExtValue();
+        //       // 找下一条指令
+        //       Instruction *nextInst = callInst->getNextNode();
+        //       Instruction *nextNextInst = nextInst->getNextNode();
+        //       // 找到store
+        //       StoreInst *storeInst = nullptr;
+
+        //       if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
+        //       {
+        //         if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextNextInst))
+        //           storeInst = storeInstTemp;
+        //       }
+        //       else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
+        //       {
+        //         storeInst = storeInstTemp;
+        //       }
+
+        //       if (storeInst)
+        //       {
+        //         // 把malloc的入参存如store的第二个操作数
+        //         Value *storedPointer = storeInst->getPointerOperand();
+        //         if (auto *pointerValue = dyn_cast<Instruction>(storedPointer))
+        //         {
+        //           if (pointerValue->getOpcode() == Instruction::Alloca)
+        //           {
+        //             // Found %4: store i32* %11, i32** %4, align 8
+        //             // 开辟二维数组...n维数组，这些情况都可以包含：
+        //             // store i32** %21, i32*** %7, align 8
+        //             Instruction *allocaInst = pointerValue;
+        //             errs() << "Const:" << *allocaInst << "  Size:  " << size << '\n';
+        //             if (ptrMapConst.count(allocaInst))
+        //             {
+        //               ptrMapConst[allocaInst] = size;
+        //               errs() << "store size: " << size << "\n";
+        //             }
+        //           }
+        //         }
+        //       }
+        //     }
+        //     // 访存大小是变量
+        //     else if (Instruction *sizeVar = dyn_cast<Instruction>(sizeValue))
+        //     {
+        //       // 找下一条指令
+        //       Instruction *nextInst = callInst->getNextNode();
+        //       Instruction *nextNextInst = nextInst->getNextNode();
+        //       // 找到store
+        //       StoreInst *storeInst = nullptr;
+
+        //       if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
+        //       {
+        //         if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextNextInst))
+        //           storeInst = storeInstTemp;
+        //       }
+        //       else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
+        //       {
+        //         storeInst = storeInstTemp;
+        //       }
+
+        //       if (storeInst)
+        //       {
+        //         // 把malloc的入参存如store的第二个操作数
+        //         Value *storedPointer = storeInst->getPointerOperand();
+        //         if (auto *pointerValue = dyn_cast<Instruction>(storedPointer))
+        //         {
+        //           if (pointerValue->getOpcode() == Instruction::Alloca)
+        //           {
+        //             // Found %4: store i32* %11, i32** %4, align 8
+        //             Instruction *allocaInst = pointerValue;
+        //             errs() << "Var:" << *allocaInst << "  Size:  " << *sizeVar << '\n';
+        //             if (ptrMapVar.count(allocaInst))
+        //             {
+        //               ptrMapVar[allocaInst] = sizeVar;
+        //             }
+        //           }
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
+
+        // else 
+        if (auto *GEP = dyn_cast<GetElementPtrInst>(&Inst))
         {
-          // 找到分配指针变量的
-          if (allocate->getAllocatedType()->isPointerTy())
-          {
 
-            /*
-               由于不知道给这个指针分配的内存大小是常量还是变量，
-               因此两个map里面，先暂时都加一下
-            */
-            if (ptrMapConst.count(&Inst) > 0 || ptrMapVar.count(&Inst))
-              continue;
+          /* New simple instrument strategy start */
 
-            // 默认访存大小先设置成0
-            ptrMapConst[&Inst] = 0;
-            ptrMapVar[&Inst] = nullptr;
-          }
-        }
-
-        // 处理通过指针赋值的情况
-        else if (auto *loadInst = dyn_cast<LoadInst>(&Inst))
-        {
-          // 判断操作数是否为指针
-          Value *loadPtr = loadInst->getPointerOperand();
-          if (!loadPtr)
+          if (dyn_cast<ConstantInt>(GEP->getOperand(2)))
             continue;
 
-          // 进一步判断load的操作数
-          if (PointerType *ptrType = dyn_cast<PointerType>(loadPtr->getType()))
-          {
-            // 如果操作数是指针的指针
-            if (ptrType->getElementType()->isPointerTy())
-            {
-              // 双重保证，找到接下来的指令，并且在load的user list里面
-              // 其实不用保证也行
-              Instruction *nextInst = loadInst->getNextNode();
-              Instruction *nextnextInst = nextInst->getNextNode();
-              StoreInst *storeInst = nullptr;
+          IRBuilder<> IRB(&Inst);
+          uint64_t cur_id = id ++;
+          ConstantInt *curId = ConstantInt::get(Int64Ty, cur_id);
+        
+          // /* call compare function */
+          // insertAflCompare(IRB, CurId,
+          //                  arraySize, GEP->getOperand(2), C, M, compareFunc);
 
-              if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
-              {
-                if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextnextInst))
-                  storeInst = storeInstTemp;
-              }
-              else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
-              {
-                storeInst = storeInstTemp;
-              }
+          insertAflGepStatus(IRB, curId,
+                              GEP->getOperand(2), C, M, gepStatusFunc);
 
-              if (storeInst)
-              {
-                // 获取store的目的指针地址
-                Value *pointerValue = storeInst->getPointerOperand();
-                Instruction *pointerValueInst = dyn_cast<Instruction>(pointerValue);
+          inst_afl_compare ++;
+          errs() << "0000\n";
 
-                // 并且store的目的地址是指针的指针类型
-                if (isPointerPointer(pointerValue))
-                {
-                  errs() << "指针赋值！\n";
+          /* New simple instrument strategy end */
 
-                  // 找到=号右边变量的map，看一下访存大小是变量还是常量
-                  Instruction *oldPtrInst = dyn_cast<Instruction>(loadPtr);
-                  bool isConst = false;
-                  uint64_t size = 0;
-                  Instruction *sizeValueInst = nullptr;
-
-                  // 这个指针，前面一定allocte过，所以肯定在map中
-                  if (ptrMapConst.count(oldPtrInst) && ptrMapConst[oldPtrInst] != 0)
-                  {
-                    isConst = true;
-                    size = ptrMapConst[oldPtrInst];
-                    errs() << "5555 " << size << "\n";
-                  }
-                  else if (ptrMapVar.count(oldPtrInst) && ptrMapVar[oldPtrInst] != nullptr)
-                  {
-                    sizeValueInst = ptrMapVar[oldPtrInst];
-                  }
-
-                  // 更新=号左边变量的访存大小
-                  if (isConst)
-                    // ptrMapConst[allocaInst] = size;
-                    ptrMapConst[pointerValueInst] = size;
-                  else
-                    // ptrMapVar[allocaInst] = sizeValueInst;
-                    ptrMapVar[pointerValueInst] = sizeValueInst;
-                }
-              }
-            }
-          }
-        }
-
-        else if (auto *callInst = dyn_cast<CallInst>(&Inst))
-        {
-          Function *function = callInst->getCalledFunction();
-
-          if (!function)
-            continue;
-
-          // malloc 或者 new
-          if ((function->getName() == "malloc") || (function->getName() == "_Znam"))
-          {
-            Value *sizeValue = callInst->getArgOperand(0);
-
-            // 访存大小是常量
-            if (ConstantInt *sizeConst = dyn_cast<ConstantInt>(sizeValue))
-            {
-              int size = sizeConst->getZExtValue();
-              // 找下一条指令
-              Instruction *nextInst = callInst->getNextNode();
-              Instruction *nextNextInst = nextInst->getNextNode();
-              // 找到store
-              StoreInst *storeInst = nullptr;
-
-              if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
-              {
-                if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextNextInst))
-                  storeInst = storeInstTemp;
-              }
-              else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
-              {
-                storeInst = storeInstTemp;
-              }
-
-              if (storeInst)
-              {
-                // 把malloc的入参存如store的第二个操作数
-                Value *storedPointer = storeInst->getPointerOperand();
-                if (auto *pointerValue = dyn_cast<Instruction>(storedPointer))
-                {
-                  if (pointerValue->getOpcode() == Instruction::Alloca)
-                  {
-                    // Found %4: store i32* %11, i32** %4, align 8
-                    // 开辟二维数组...n维数组，这些情况都可以包含：
-                    // store i32** %21, i32*** %7, align 8
-                    Instruction *allocaInst = pointerValue;
-                    errs() << "Const:" << *allocaInst << "  Size:  " << size << '\n';
-                    if (ptrMapConst.count(allocaInst))
-                    {
-                      ptrMapConst[allocaInst] = size;
-                      errs() << "store size: " << size << "\n";
-                    }
-                  }
-                }
-              }
-            }
-            // 访存大小是变量
-            else if (Instruction *sizeVar = dyn_cast<Instruction>(sizeValue))
-            {
-              // 找下一条指令
-              Instruction *nextInst = callInst->getNextNode();
-              Instruction *nextNextInst = nextInst->getNextNode();
-              // 找到store
-              StoreInst *storeInst = nullptr;
-
-              if (auto *bitCastInst = dyn_cast<BitCastInst>(nextInst))
-              {
-                if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextNextInst))
-                  storeInst = storeInstTemp;
-              }
-              else if (StoreInst *storeInstTemp = dyn_cast<StoreInst>(nextInst))
-              {
-                storeInst = storeInstTemp;
-              }
-
-              if (storeInst)
-              {
-                // 把malloc的入参存如store的第二个操作数
-                Value *storedPointer = storeInst->getPointerOperand();
-                if (auto *pointerValue = dyn_cast<Instruction>(storedPointer))
-                {
-                  if (pointerValue->getOpcode() == Instruction::Alloca)
-                  {
-                    // Found %4: store i32* %11, i32** %4, align 8
-                    Instruction *allocaInst = pointerValue;
-                    errs() << "Var:" << *allocaInst << "  Size:  " << *sizeVar << '\n';
-                    if (ptrMapVar.count(allocaInst))
-                    {
-                      ptrMapVar[allocaInst] = sizeVar;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        else if (auto *GEP = dyn_cast<GetElementPtrInst>(&Inst))
-        {
           // errs() << "Find a GEP! number of operands:";
           // errs() << GEP->getNumOperands() << '\n';
 
           /* 栈数组和全局数组访问 */
 
-          if (GEP->getSourceElementType()->isArrayTy())
-          {
-            // 例：%14 = getelementptr inbounds [20 x [10 x i32]], [20 x [10 x i32]]* %5, i64 0, i64 8
-            // 这种都是有三个操作数的，其实不判断==3也可以，因为不可能有其他情况
-            if (GEP->getNumOperands() == 3)
-            {
-              if (!dyn_cast<ConstantInt>(GEP->getOperand(2)))
-              {
-                // errs() << "Find a variable stack GEP! \n";
+          // if (GEP->getSourceElementType()->isArrayTy())
+          // {
+          //   // 例：%14 = getelementptr inbounds [20 x [10 x i32]], [20 x [10 x i32]]* %5, i64 0, i64 8
+          //   // 这种都是有三个操作数的，其实不判断==3也可以，因为不可能有其他情况
+          //   if (GEP->getNumOperands() == 3)
+          //   {
+          //     if (!dyn_cast<ConstantInt>(GEP->getOperand(2)))
+          //     {
+          //       // errs() << "Find a variable stack GEP! \n";
 
-                IRBuilder<> IRB(&Inst);
+          //       IRBuilder<> IRB(&Inst);
                 
-                // if the source type is not array type, continue
-                const Type *gepSourceType = GEP->getSourceElementType();
-                if (!ArrayType::classof(gepSourceType))
-                  continue;
+          //       // if the source type is not array type, continue
+          //       const Type *gepSourceType = GEP->getSourceElementType();
+          //       if (!ArrayType::classof(gepSourceType))
+          //         continue;
 
-                uint64_t array_size = gepSourceType->getArrayNumElements();
-                ConstantInt *arraySize = ConstantInt::get(Int64Ty, array_size);
+          //       uint64_t array_size = gepSourceType->getArrayNumElements();
+          //       ConstantInt *arraySize = ConstantInt::get(Int64Ty, array_size);
 
-                uint64_t cur_id = id ++;
-                ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
+          //       uint64_t cur_id = id ++;
+          //       ConstantInt *CurId = ConstantInt::get(Int64Ty, cur_id);
               
-                // /* call compare function */
-                // insertAflCompare(IRB, CurId,
-                //                  arraySize, GEP->getOperand(2), C, M, compareFunc);
+          //       // /* call compare function */
+          //       // insertAflCompare(IRB, CurId,
+          //       //                  arraySize, GEP->getOperand(2), C, M, compareFunc);
 
-                insertAflGepStatus(IRB, CurId,
-                                   GEP->getOperand(2), C, M, gepStatusFunc);
+          //       insertAflGepStatus(IRB, CurId,
+          //                          GEP->getOperand(2), C, M, gepStatusFunc);
     
-                inst_afl_compare ++;
-                errs() << array_size << " 0000\n";
-              }
-            }
-          }
+          //       inst_afl_compare ++;
+          //       errs() << array_size << " 0000\n";
+          //     }
+          //   }
+          // }
 
           // // 指针访问（包含堆变量）
           // else if (GEP->getOperand(0)->getType()->isPointerTy())
