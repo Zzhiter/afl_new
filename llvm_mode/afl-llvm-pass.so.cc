@@ -444,6 +444,9 @@ bool AFLCoverage::runOnModule(Module &M)
 
           /* New simple instrument strategy start */
 
+          if (GEP->getNumOperands() != 3)
+            continue;
+
           if (dyn_cast<ConstantInt>(GEP->getOperand(2)))
             continue;
           
