@@ -248,6 +248,10 @@ bool AFLCoverage::runOnModule(Module &M)
     if (F.getName().startswith("__afl"))
       continue;
 
+    // 过滤不插桩的函数
+    if (F.getName().startswith("__asan") || F.getName().startswith("__ubsan"))
+      continue;
+
     for (auto &BB : F)
     {
       for (auto &Inst : BB)
