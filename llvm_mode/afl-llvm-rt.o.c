@@ -73,7 +73,7 @@ __thread u32 __afl_prev_loc;
 static u8 is_persistent;
 
 void __afl_gep_status(uint64_t id, uint64_t index) {
-  if (id >= 2000 || index >= 2000) return;
+  if (id >= 10000 || index >= 2000) return;
   
   if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
     __afl_gep_status_ptr[id * 2000 + index] = 1;
@@ -83,6 +83,24 @@ void __afl_gep_status(uint64_t id, uint64_t index) {
   // *__afl_gep_new_status_cnt = 1;
 
   // printf("xxx%d\n", __afl_gep_status_ptr[id * 2000 + index]);
+}
+
+uint64_t MurmurHash3_64(uint64_t key, uint64_t seed) {
+    key ^= seed;
+    key ^= key >> 33;
+    key *= 0xff51afd7ed558ccdULL;
+    key ^= key >> 33;
+    key *= 0xc4ceb9fe1a85ec53ULL;
+    key ^= key >> 33;
+    return key % 2000;
+}
+
+void __afl_cmp_status(uint64_t id, uint64_t value) {
+    if (id >= 10000) return;
+
+    value = MurmurHash3_64(value, 1234);
+
+    // TODO
 }
 
 // void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
