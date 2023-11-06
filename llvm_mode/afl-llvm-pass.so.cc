@@ -116,43 +116,6 @@ BasicBlock *AFLCoverage::getNextBasicBlock(BasicBlock *currentBB, Function &F)
   return nullptr;
 }
 
-int AFLCoverage::getPointerType(const Value *ptrValue)
-{
-  // 获取指针指向元素的类型
-  Type *elementType = ptrValue->getType()->getPointerElementType();
-  if (elementType->isIntegerTy(32))
-    return 4;
-  if (elementType->isIntegerTy(64))
-    return 8;
-  if (elementType->isIntegerTy(8))
-    return 1;
-  if (elementType->isIntegerTy(16))
-    return 2;
-
-  // 其他类型不处理
-  return -1;
-}
-
-bool AFLCoverage::isPointerPointer(Value *val)
-{
-  PointerType *ptrType = dyn_cast<PointerType>(val->getType());
-  // 如果操作数是指针的指针
-  if (ptrType->getElementType()->isPointerTy())
-    return true;
-  return false;
-}
-
-Value *AFLCoverage::getGepOriginalPtr(Instruction *Inst)
-{
-  auto *gep = dyn_cast<GetElementPtrInst>(Inst);
-  LoadInst *loadInst = dyn_cast<LoadInst>(gep->getOperand(0));
-
-  if (!loadInst)
-    return nullptr;
-
-  return loadInst->getPointerOperand();
-}
-
 void AFLCoverage::insertAflCompare(IRBuilder<> &IRB, Value *curId,
                                    Value *arraySize, Value *index, LLVMContext &C, Module &M, Function *compareFunc)
 {
