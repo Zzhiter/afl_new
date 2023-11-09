@@ -87,6 +87,66 @@ namespace
 
 char AFLCoverage::ID = 0;
 
+static bool isIgnoreFunction(const llvm::Function *F) {
+
+  // Starting from "LLVMFuzzer" these are functions used in libfuzzer based
+  // fuzzing campaign installations, e.g. oss-fuzz
+
+  static constexpr const char *ignoreList[] = {
+      "asan.",
+      "llvm.",
+      "sancov.",
+      "__ubsan",
+      "ign.",
+      "__afl",
+      "_fini",
+      "__libc_",
+      "__asan",
+      "__msan",
+      "__cmplog",
+      "__sancov",
+      "__san",
+      "__cxx_",
+      "__decide_deferred",
+      "_GLOBAL",
+      "_ZZN6__asan",
+      "_ZZN6__lsan",
+      "msan.",
+      "LLVMFuzzerM",
+      "LLVMFuzzerC",
+      "LLVMFuzzerI",
+      "maybe_duplicate_stderr",
+      "discard_output",
+      "close_stdout",
+      "dup_and_close_stderr",
+      "maybe_close_fd_mask",
+      "ExecuteFilesOnyByOne"
+  };
+
+  for (auto const &ignoreListFunc : ignoreList) {
+
+    if (F->getName().startswith(ignoreListFunc)) { return true; }
+
+  }
+
+  static constexpr const char *ignoreSubstringList[] = {
+
+      "__asan", "__msan",       "__ubsan",    "__lsan",  "__san", "__sanitize",
+      "__cxx",  "DebugCounter", "DwarfDebug", "DebugLoc"
+
+  };
+
+  for (auto const &ignoreListFunc : ignoreSubstringList) {
+
+    // hexcoder: F->getName().contains() not avaiilable in llvm 3.8.0
+    if (StringRef::npos != F->getName().find(ignoreListFunc)) { return true; }
+
+  }
+
+  return false;
+
+}
+
 // 函数用于获取当前基本块后面的基本块
 BasicBlock *AFLCoverage::getNextBasicBlock(BasicBlock *currentBB, Function &F)
 {
@@ -215,12 +275,8 @@ bool AFLCoverage::runOnModule(Module &M)
 
   for (auto &F : M)
   {
-    // 防止对外链的afl函数进行插桩
-    if (F.getName().startswith("__afl"))
-      continue;
-
     // 过滤不插桩的函数
-    if (F.getName().startswith("__asan") || F.getName().startswith("__ubsan"))
+    if (!F.size() || isIgnoreFunction(&F))
       continue;
 
     for (auto &BB : F)
@@ -268,6 +324,8 @@ bool AFLCoverage::runOnModule(Module &M)
           if (cmpStatusInsertCnt >= 10000) 
             continue;
 
+          // It only operates on integers or pointers. 
+          // The operands must be identical types.
           ICmpInst *icmpInst = cast<ICmpInst>(&Inst);
           // 获取icmp指令的操作数
           Value *op1 = icmpInst->getOperand(0);
