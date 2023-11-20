@@ -52,9 +52,16 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
-u64* __afl_gep_new_status_cnt;
-u8 __afl_gep_status_initial[10000 * 2000];
-u8* __afl_gep_status_ptr = __afl_gep_status_initial;
+// u64* __afl_gep_new_status_cnt;
+// u8 __afl_gep_status_initial[10000 * 2000];
+// u8* __afl_gep_status_ptr = __afl_gep_status_initial;
+
+u64* __afl_new_cmp_operands_sub_cnt;
+int64_t __afl_cmp_operands_sub_initial[10000];
+int64_t* __afl_cmp_operands_sub_ptr = __afl_cmp_operands_sub_initial;
+
+// u8 __afl_gep_status_initial[10000 * 2000];
+// u8* __afl_gep_status_ptr = __afl_gep_status_initial;
 
 // uint64_t __afl_gep_index_min_initial[1 << 10];
 // uint64_t *__afl_gep_index_min = __afl_gep_index_min_initial;
@@ -73,14 +80,14 @@ __thread u32 __afl_prev_loc;
 static u8 is_persistent;
 
 void __afl_gep_status(uint64_t id, uint64_t index) {
-  if (id >= 10000 || index >= 2000) return;
+  // if (id >= 10000 || index >= 2000) return;
   
-  if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
-    __afl_gep_status_ptr[id * 2000 + index] = 1;
-    (*__afl_gep_new_status_cnt) ++;
-  }
+  // if (__afl_gep_status_ptr[id * 2000 + index] == 0) {
+  //   __afl_gep_status_ptr[id * 2000 + index] = 1;
+  //   (*__afl_gep_new_status_cnt) ++;
+  // }
 
-  // *__afl_gep_new_status_cnt = 1;
+  // // *__afl_gep_new_status_cnt = 1;
 
   // printf("xxx%d\n", __afl_gep_status_ptr[id * 2000 + index]);
 }
@@ -98,9 +105,21 @@ uint64_t MurmurHash3_64(uint64_t key, uint64_t seed) {
 void __afl_cmp_status(uint64_t id, uint64_t value) {
     if (id >= 10000) return;
 
-    value = MurmurHash3_64(value, 1234);
+    // value = MurmurHash3_64(value, 1234); // 暂时不用hash
 
     // TODO
+}
+
+void __afl_cmp_operands(u64 id, int64_t first, int64_t second) {
+    if (id >= 10000) return;
+
+    int64_t res = labs(first - second);
+    if (res < __afl_cmp_operands_sub_ptr[id]) {
+      (*__afl_new_cmp_operands_sub_cnt)++;
+      __afl_cmp_operands_sub_ptr[id] = res;
+    }
+
+    // printf("id: %lld, first: %lld, second: %lld", id, first, second);
 }
 
 // void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
@@ -156,8 +175,13 @@ static void __afl_map_shm(void) {
 
     __afl_area_ptr[0] = 1;
 
-    __afl_gep_new_status_cnt = (u64*)&__afl_area_ptr[MAP_SIZE];
-    __afl_gep_status_ptr = (u8*)(__afl_gep_new_status_cnt + sizeof(u64));
+    // // ***************暂时关闭这个策略****************
+    // __afl_gep_new_status_cnt = (u64*)&__afl_area_ptr[MAP_SIZE];
+    // __afl_gep_status_ptr = (u8*)(__afl_gep_new_status_cnt + sizeof(u64));
+    // // ***************暂时关闭这个策略****************
+
+    __afl_new_cmp_operands_sub_cnt = (u64*)&__afl_area_ptr[MAP_SIZE];
+    __afl_cmp_operands_sub_ptr = (int64_t*)(__afl_new_cmp_operands_sub_cnt + sizeof(u64));
 
     // // set pointer after trace_bits
     // __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];

@@ -78,6 +78,8 @@ namespace
     void insertGetCmpStatus(IRBuilder<> &IRB, Value *curId,
                             Value *value, LLVMContext &C, Module &M, Function *getCmpStatusFunc);
     
+    void insertGetCmpOperands(IRBuilder<> &IRB, Value *curId, Value *first,
+                              Value *second, LLVMContext &C, Module &M, Function *getCmpOperandsFunc);
     // StringRef getPassName() const override {
     //  return "American Fuzzy Lop Instrumentation";
     // }
@@ -204,7 +206,18 @@ void AFLCoverage::insertGetCmpStatus(IRBuilder<> &IRB, Value *curId,
   Value *compareFuncArgValue = {value};
   IRB.CreateCall(getCmpStatusFunc, {compareFuncArgID,
                                     compareFuncArgValue});
-  errs() << "Insert cmp func success!\n";
+  // errs() << "Insert insertGetCmpStatus func success!\n";
+}
+
+void AFLCoverage::insertGetCmpOperands(IRBuilder<> &IRB, Value *curId, Value *first,
+                                       Value *second, LLVMContext &C, Module &M, Function *getCmpOperandsFunc)
+{
+  Value *compareFuncArgID = {curId};
+  Value *compareFuncArgFirst = {first};
+  Value *compareFuncArgSecond = {second};
+  IRB.CreateCall(getCmpOperandsFunc, {compareFuncArgID, compareFuncArgFirst,
+                                      compareFuncArgSecond});
+  // errs() << "Insert insertGetCmpOperands func success!\n";
 }
 
 bool AFLCoverage::runOnModule(Module &M)
@@ -268,10 +281,19 @@ bool AFLCoverage::runOnModule(Module &M)
   Function *getCmpStatusFunc = Function::Create(
       getCmpStatusFuncType, GlobalValue::ExternalLinkage, "__afl_cmp_status", &M);
 
+  FunctionType *getCmpOperandsFuncType = FunctionType::get(
+      Type::getVoidTy(C),                                              // return type
+      {Type::getInt64Ty(C), Type::getInt64Ty(C), Type::getInt64Ty(C)}, // argument types
+      false                                                            // variadic function
+  );
+  Function *getCmpOperandsFunc = Function::Create(
+      getCmpStatusFuncType, GlobalValue::ExternalLinkage, "__afl_cmp_operands", &M);
+
   /* Our Instrument before afl's */
 
   int gepStatusInsertCnt = 0;
   int cmpStatusInsertCnt = 0;
+  int cmpOperandsInsertCnt = 0;
 
   for (auto &F : M)
   {
@@ -285,26 +307,27 @@ bool AFLCoverage::runOnModule(Module &M)
       {
         if (auto *GEP = dyn_cast<GetElementPtrInst>(&Inst))
         {
-          /* New simple instrument strategy start */
+          // // ***************暂时不使用这个策略**************
 
-          if (GEP->getNumOperands() != 3)
-            continue;
+          // if (GEP->getNumOperands() != 3)
+          //   continue;
 
-          if (dyn_cast<ConstantInt>(GEP->getOperand(2)))
-            continue;
+          // if (dyn_cast<ConstantInt>(GEP->getOperand(2)))
+          //   continue;
           
-          if (gepStatusInsertCnt >= 10000) 
-            continue;
+          // if (gepStatusInsertCnt >= 10000) 
+          //   continue;
 
-          IRBuilder<> IRB(&Inst);
-          uint64_t cur_id = id ++;
-          ConstantInt *curId = ConstantInt::get(Int64Ty, cur_id);
+          // IRBuilder<> IRB(&Inst);
+          // uint64_t cur_id = id++;
+          // ConstantInt *curId = ConstantInt::get(Int64Ty, cur_id);
 
-          insertAflGepStatus(IRB, curId,
-                              GEP->getOperand(2), C, M, gepStatusFunc);
-          gepStatusInsertCnt ++;
+          // insertAflGepStatus(IRB, curId,
+          //                   GEP->getOperand(2), C, M, gepStatusFunc);
+          // gepStatusInsertCnt++;
 
-          /* New simple instrument strategy end */
+          // // ***************暂时不使用这个策略**************
+
         } else if (Inst.getOpcode() == Instruction::ICmp) 
         {
           // 判断后面跟着的是不是if.then
@@ -316,13 +339,13 @@ bool AFLCoverage::runOnModule(Module &M)
           if (!nextBB) continue;
           if (nextBB->getName().str().find("if.then") != 0) continue;
 
-          // 获取到icmp里面的变量
-          errs() << "Yes!!!" << "\n";
+          // // 获取到icmp里面的变量
+          // errs() << "Yes!!!" << "\n";
 
           // 准备插桩！一个变量插一个！
 
-          if (cmpStatusInsertCnt >= 10000) 
-            continue;
+          if (cmpStatusInsertCnt >= 10000) continue;
+          if (cmpOperandsInsertCnt >= 10000) continue;
 
           // It only operates on integers or pointers. 
           // The operands must be identical types.
@@ -337,19 +360,29 @@ bool AFLCoverage::runOnModule(Module &M)
           IRBuilder<> IRB(&Inst);
           uint64_t curId;
 
-          if (!dyn_cast<ConstantInt>(op1)) {
-            curId = cmpId++;
-            ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
-            insertGetCmpStatus(IRB, curIdValue, op1, C, M, getCmpStatusFunc);
-            cmpStatusInsertCnt ++;
-          }
+          // 不管两个操作数是变量还是常量，都传入了
+          curId = cmpId++;
+          ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
+          insertGetCmpOperands(IRB, curIdValue, op1, op2, C, M, getCmpOperandsFunc);
+          cmpOperandsInsertCnt++;
 
-          if (!dyn_cast<ConstantInt>(op2)) {
-            curId = cmpId++;
-            ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
-            insertGetCmpStatus(IRB, curIdValue, op2, C, M, getCmpStatusFunc);
-            cmpStatusInsertCnt ++;
-          }
+          // ***************暂时不使用这个策略**************
+
+          // if (!dyn_cast<ConstantInt>(op1)) {
+          //   curId = cmpId++;
+          //   ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
+          //   insertGetCmpStatus(IRB, curIdValue, op1, C, M, getCmpStatusFunc);
+          //   cmpStatusInsertCnt++;
+          // }
+
+          // if (!dyn_cast<ConstantInt>(op2)) {
+          //   curId = cmpId++;
+          //   ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
+          //   insertGetCmpStatus(IRB, curIdValue, op2, C, M, getCmpStatusFunc);
+          //   cmpStatusInsertCnt++;
+          // }
+
+          // ***************暂时不使用这个策略**************
         }
       }
     }
@@ -357,6 +390,7 @@ bool AFLCoverage::runOnModule(Module &M)
 
   OKF("Instrumented %u gepStatus locations.", gepStatusInsertCnt);
   OKF("Instrumented %u cmpStatus locations.", cmpStatusInsertCnt);
+  OKF("Instrumented %u cmpOperands locations.", cmpOperandsInsertCnt);
 
   /* Instrument all the things! */
 

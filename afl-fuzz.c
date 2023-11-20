@@ -90,6 +90,9 @@
 /* Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
 
+// 日志文件名
+char *log_file_name = "new_cmp_operands_sub.log";
+FILE *log_file = NULL;
 
 EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *out_file,                  /* File to fuzz, if any             */
@@ -150,6 +153,7 @@ EXP_ST u8* trace_bits;                /* SHM with instrumentation bitmap  */
 // EXP_ST u64* gep_index_min_ptr;        /* SHM with gep min index */
 // EXP_ST u64* gep_index_max_ptr;        /* SHM with gep max index */
 EXP_ST u64* gep_new_status_cnt;
+EXP_ST u64* new_cmp_operands_sub_cnt;
 EXP_ST u8* gep_status_ptr;
 
 EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
@@ -202,7 +206,8 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            blocks_eff_select,         /* Blocks selected as fuzzable      */
           //  total_gep_index_max_cnt,   /* Total count of hit gep max cnt */
           //  total_gep_threshold_cnt;   /* Total count of hit gep threshold cnt */
-           total_hit_new_gep_status;
+           total_hit_new_gep_status,
+           total_new_cmp_operands_sub_cnt;
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -261,12 +266,13 @@ struct queue_entry {
 
   u32 bitmap_size,                    /* Number of bits set in bitmap     */
       exec_cksum,                     /* Checksum of the execution trace  */
-      // gep_index_max_cnt;              /* Count of trigger gep index max */
+      // gep_index_max_cnt;           /* Count of trigger gep index max   */
       gep_new_status_cnt;
 
   u64 exec_us,                        /* Execution time (us)              */
       handicap,                       /* Number of queue cycles behind    */
-      depth;                          /* Path depth                       */
+      depth,                          /* Path depth                       */
+      new_cmp_operands_sub_cnt;       
 
   u8* trace_mini;                     /* Trace bytes, if kept             */
   u32 tc_ref;                         /* Trace bytes ref count            */
@@ -1374,7 +1380,11 @@ EXP_ST void setup_shm(void) {
 
   // shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (1 << 10) * sizeof(u64) * 3, 
   //                 IPC_CREAT | IPC_EXCL | 0600);
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + sizeof(u64) + sizeof(u8) * 2000 * 2000, 
+
+  // shm_id = shmget(IPC_PRIVATE, MAP_SIZE + sizeof(u64) + sizeof(u8) * 10000 * 2000, 
+  //                 IPC_CREAT | IPC_EXCL | 0600);
+
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (10000 + 1) * sizeof(u64), 
                   IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
@@ -1396,10 +1406,20 @@ EXP_ST void setup_shm(void) {
   
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
 
-  gep_new_status_cnt = (u64*)(trace_bits + MAP_SIZE);
-  gep_status_ptr = (u8*)(gep_new_status_cnt + sizeof(u64));
+  // ************暂时不使用*******************
+
+  // gep_new_status_cnt = (u64*)(trace_bits + MAP_SIZE);
+  // gep_status_ptr = (u8*)(gep_new_status_cnt + sizeof(u64));
   
-  memset(gep_new_status_cnt, 0, sizeof(u64) + sizeof(u8) * 2000 * 2000);
+  // memset(gep_new_status_cnt, 0, sizeof(u64) + sizeof(u8) * 10000 * 2000);
+
+  // ************暂时不使用*******************
+
+  new_cmp_operands_sub_cnt = (u64*)(trace_bits + MAP_SIZE);
+  // TODO: 暂时没有用上每个最小值
+
+  memset(new_cmp_operands_sub_cnt, 0, (1) * sizeof(u64));
+  memset(new_cmp_operands_sub_cnt + sizeof(u64), 0x3f, (10000) * sizeof(u64));
 
   // gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
   // gep_index_min_ptr = gep_size_ptr + (1 << 10);
@@ -2318,8 +2338,10 @@ static u8 run_target(char** argv, u32 timeout) {
   // memset(gep_index_max_ptr, 0, sizeof(u64) * 2);
   // memset(gep_index_min_ptr, 0, sizeof(u64));
 
-  memset(gep_new_status_cnt, 0, sizeof(u64));
+  // memset(gep_new_status_cnt, 0, sizeof(u64));
   // *gep_new_status_cnt = 999;
+
+  memset(new_cmp_operands_sub_cnt, 0, sizeof(u64));
 
   MEM_BARRIER();
 
@@ -3211,6 +3233,72 @@ static inline int has_new_gep_status() {
   return 0;
 }
 
+// 初始化日志
+void init_log(const char *out_dir) {
+    if (log_file_name == NULL) {
+        log_file_name = alloc_printf("%s/new_cmp_operands_sub.log", out_dir);
+    }
+
+    if (log_file == NULL) {
+        log_file = fopen(log_file_name, "a");
+        if (log_file == NULL) {
+            fprintf(stderr, "Error: Could not open the log file.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+// 写入日志文件的函数实现
+void write_log(int value, time_t current_time, double ratio) {
+    if (log_file != NULL) {
+        // 使用本地时间格式化时间字符串
+        char time_str[26];
+        ctime_r(&current_time, time_str);
+        time_str[24] = '\0'; // 移除换行符
+
+        // 写入日志文件
+        fprintf(log_file, "Total Count: %d, Current Time: %s, Ratio: %f\n", 
+                value, time_str, ratio);
+
+        fflush(log_file);
+    } else {
+        fprintf(stderr, "Error: Log file is not initialized.\n");
+    }
+}
+
+// 关闭日志
+void close_log() {
+    if (log_file != NULL) {
+        if (fclose(log_file) != 0) {
+            fprintf(stderr, "Error: Could not close the log file.\n");
+        }
+    }
+
+    if (log_file_name != NULL) {
+        free(log_file_name);
+        log_file_name = NULL;
+    }
+}
+
+static inline int has_new_cmp_operands_sub() {
+    if (*new_cmp_operands_sub_cnt > 0) {
+        total_new_cmp_operands_sub_cnt += *new_cmp_operands_sub_cnt;
+        if (total_new_cmp_operands_sub_cnt % 20 == 0) {
+            // 获取当前时间
+            time_t current_time;
+            time(&current_time);
+
+            u32 t_bytes = count_non_255_bytes(virgin_bits);
+            double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
+
+            // 写入日志文件
+            write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
+        }
+        return 1;
+    }
+    return 0;
+}
+
 /* Check if the result of an execve() during routine fuzzing is interesting,
    save or queue the input test case for further analysis if so. Returns 1 if
    entry is saved, 0 otherwise. */
@@ -3221,6 +3309,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   u8  hnb;
   // u8  hngm = 0;
   u8 hngs = 0;
+  u8 hncops = 0;
   s32 fd;
   u8  keeping = 0, res;
 
@@ -3233,10 +3322,13 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
 
+    // hncops = has_new_cmp_operands_sub();
+
     if (
       (!(hnb = has_new_bits(virgin_bits))) && 
       // (!(hngm = has_new_gep_max()))
-        (!(hngs = has_new_gep_status()))
+        // (!(hngs = has_new_gep_status()))
+        (!(hncops = has_new_cmp_operands_sub()))
       ) {
       if (crash_mode) total_crashes++;
       return 0;
@@ -3268,13 +3360,13 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     //   queue_top->is_hit_gep_threshold = 1;
     // }
 
-    if (hngs == 1) {
-      queue_top->gep_new_status_cnt = *gep_new_status_cnt;
-    }
+    // if (hngs == 1) {
+    //   queue_top->gep_new_status_cnt = *gep_new_status_cnt;
+    // }
 
-    if (hngs == 2) {
-      queue_top->is_hot = 1;
-    }
+    // if (hngs == 2) {
+    //   queue_top->is_hot = 1;
+    // }
 
     queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
 
@@ -4272,10 +4364,11 @@ static void show_stats(void) {
   SAYF(bV bSTOP "  total new gep  : " cRST "%-17s " bSTG bV, tmp);
 
 
-  sprintf(tmp, "%s hit",  DI(0));
+  sprintf(tmp, "%s  ",  DI(total_new_cmp_operands_sub_cnt));
+  // sprintf(tmp, "%s hit",  DI(0));
   // sprintf(tmp, "%s ", DI(gep_index_max_ptr[3]));
 
-  SAYF(bSTOP "  threshold cnt : " cRST "%-21s " bSTG bV "\n", tmp);
+  SAYF(bSTOP "  total cmp cnt : " cRST "%-21s " bSTG bV "\n", tmp);
 
   /* end of our gep states */
 
@@ -4909,9 +5002,9 @@ static u32 calculate_score(struct queue_entry* q) {
   //   perf_score *= q->gep_index_max_cnt;
   // }
 
-  if (q->gep_new_status_cnt) {
-    perf_score *= q->gep_new_status_cnt;
-  }
+  // if (q->gep_new_status_cnt) {
+  //   perf_score *= q->gep_new_status_cnt;
+  // }
 
   /* Make sure that we don't go over limit. */
 
@@ -5144,7 +5237,8 @@ static u8 fuzz_one(char** argv) {
 
   } else if (!dumb_mode && !queue_cur->favored && 
             //  !queue_cur->is_hit_gep_threshold 
-             !queue_cur->is_hot
+            //  !queue_cur->is_hot
+            1
               && queued_paths > 10) {
 
     /* Otherwise, still possibly skip non-favored cases, albeit less often.
@@ -8086,6 +8180,7 @@ int main(int argc, char** argv) {
 
   setup_signal_handlers();
   check_asan_opts();
+  init_log(out_dir);
 
   if (sync_id) fix_up_sync();
 
@@ -8276,6 +8371,7 @@ stop_fuzzing:
 
   }
 
+  close_log();
   fclose(plot_file);
   destroy_queue();
   destroy_extras();
