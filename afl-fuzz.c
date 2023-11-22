@@ -3283,7 +3283,7 @@ void close_log() {
 static inline int has_new_cmp_operands_sub() {
     if (*new_cmp_operands_sub_cnt > 0) {
         total_new_cmp_operands_sub_cnt += *new_cmp_operands_sub_cnt;
-        if (total_new_cmp_operands_sub_cnt % 20 == 0) {
+        // if (total_new_cmp_operands_sub_cnt % 20 == 0) {
             // 获取当前时间
             time_t current_time;
             time(&current_time);
@@ -3293,7 +3293,7 @@ static inline int has_new_cmp_operands_sub() {
 
             // 写入日志文件
             write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
-        }
+        // }
         return 1;
     }
     return 0;
@@ -3322,13 +3322,14 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
 
-    // hncops = has_new_cmp_operands_sub();
+    hncops = has_new_cmp_operands_sub();
 
     if (
       (!(hnb = has_new_bits(virgin_bits))) && 
       // (!(hngm = has_new_gep_max()))
         // (!(hngs = has_new_gep_status()))
-        (!(hncops = has_new_cmp_operands_sub()))
+        // (!(hncops = has_new_cmp_operands_sub()))
+        1
       ) {
       if (crash_mode) total_crashes++;
       return 0;
