@@ -7334,7 +7334,8 @@ static void usage(u8* argv0) {
        "  -f file       - location read by the fuzzed program (stdin)\n"
        "  -t msec       - timeout for each run (auto-scaled, 50-%u ms)\n"
        "  -m megs       - memory limit for child process (%u MB)\n"
-       "  -Q            - use binary-only instrumentation (QEMU mode)\n\n"     
+       "  -Q            - use binary-only instrumentation (QEMU mode)\n"
+       "  -L file       - log file, out_dir/new_cmp_operands_sub.log by default\n"    
  
        "Fuzzing behavior settings:\n\n"
 
@@ -8055,6 +8056,10 @@ int main(int argc, char** argv) {
 
         if (out_file) FATAL("Multiple -f options not supported");
         out_file = optarg;
+        break;
+
+      case 'L': /* log file */
+        log_file_name = optarg;
         break;
 
       case 'x': /* dictionary */
