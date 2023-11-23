@@ -93,6 +93,7 @@
 // 日志文件名
 char *log_file_name = "new_cmp_operands_sub.log";
 FILE *log_file = NULL;
+u8 log_file_init = 1;
 
 EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *out_file,                  /* File to fuzz, if any             */
@@ -3243,7 +3244,8 @@ void init_log(const char *out_dir) {
         log_file = fopen(log_file_name, "a");
         if (log_file == NULL) {
             fprintf(stderr, "Error: Could not open the log file.\n");
-            exit(EXIT_FAILURE);
+            // exit(EXIT_FAILURE);
+            log_file_init = 0;
         }
     }
 }
@@ -3284,15 +3286,19 @@ static inline int has_new_cmp_operands_sub() {
     if (*new_cmp_operands_sub_cnt > 0) {
         total_new_cmp_operands_sub_cnt += *new_cmp_operands_sub_cnt;
         // if (total_new_cmp_operands_sub_cnt % 20 == 0) {
-            // 获取当前时间
-            time_t current_time;
-            time(&current_time);
+            if (log_file_init) {
+              // 获取当前时间
+              time_t current_time;
+              time(&current_time);
 
-            u32 t_bytes = count_non_255_bytes(virgin_bits);
-            double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
+              u32 t_bytes = count_non_255_bytes(virgin_bits);
+              double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
 
-            // 写入日志文件
-            write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
+              // 写入日志文件
+              write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
+            }
+
+            
         // }
         return 1;
     }
