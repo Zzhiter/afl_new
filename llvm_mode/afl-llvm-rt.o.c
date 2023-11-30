@@ -60,6 +60,10 @@ u64* __afl_new_cmp_operands_sub_cnt;
 int64_t __afl_cmp_operands_sub_initial[10000];
 int64_t* __afl_cmp_operands_sub_ptr = __afl_cmp_operands_sub_initial;
 
+u64* __afl_new_cmp_resloved_cnt;
+u8 __afl_new_cmp_resloved_map[10000];
+u8* __afl_new_cmp_resloved_ptr = __afl_new_cmp_resloved_map;
+
 // u8 __afl_gep_status_initial[10000 * 2000];
 // u8* __afl_gep_status_ptr = __afl_gep_status_initial;
 
@@ -122,6 +126,21 @@ void __afl_cmp_operands(u64 id, int64_t first, int64_t second) {
     // printf("id: %lld, first: %lld, second: %lld", id, first, second);
 }
 
+void __afl_cmp_resolve(u64 id) {
+  if (id >= 10000) return;
+
+  // *__afl_new_cmp_resloved_cnt = 999;
+
+  if (__afl_new_cmp_resloved_ptr[id] == 1) {
+    __afl_new_cmp_resloved_ptr[id] = 0;
+    (*__afl_new_cmp_resloved_cnt)++;
+  }
+  // __afl_new_cmp_resloved_ptr[id] = 1;
+  // (*__afl_new_cmp_resloved_cnt)++;
+
+  // printf("111111111111111\n");
+}
+
 // void __afl_compare(uint64_t id, uint64_t _size, uint64_t index)
 // {
 //   //  printf("id is %lu\n", id);
@@ -181,7 +200,10 @@ static void __afl_map_shm(void) {
     // // ***************暂时关闭这个策略****************
 
     __afl_new_cmp_operands_sub_cnt = (u64*)&__afl_area_ptr[MAP_SIZE];
-    __afl_cmp_operands_sub_ptr = (int64_t*)(__afl_new_cmp_operands_sub_cnt + sizeof(u64));
+    __afl_cmp_operands_sub_ptr = (int64_t*)(__afl_new_cmp_operands_sub_cnt + 1);
+
+    __afl_new_cmp_resloved_cnt = (u64*)(__afl_cmp_operands_sub_ptr + 10000);
+    __afl_new_cmp_resloved_ptr = (u8*)(__afl_new_cmp_resloved_cnt + 1);
 
     // // set pointer after trace_bits
     // __afl_gep_size_ptr = (u64*)&__afl_area_ptr[MAP_SIZE];

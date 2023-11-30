@@ -156,6 +156,8 @@ EXP_ST u8* trace_bits;                /* SHM with instrumentation bitmap  */
 EXP_ST u64* gep_new_status_cnt;
 EXP_ST u64* new_cmp_operands_sub_cnt;
 EXP_ST u8* gep_status_ptr;
+EXP_ST u64* cmp_resloved_cnt = NULL;
+EXP_ST u32 total_cmp_cnt = 22314;
 
 EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
            virgin_tmout[MAP_SIZE],    /* Bits we haven't seen in tmouts   */
@@ -1385,7 +1387,8 @@ EXP_ST void setup_shm(void) {
   // shm_id = shmget(IPC_PRIVATE, MAP_SIZE + sizeof(u64) + sizeof(u8) * 10000 * 2000, 
   //                 IPC_CREAT | IPC_EXCL | 0600);
 
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (10000 + 1) * sizeof(u64), 
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE + (10000 + 1) * sizeof(u64) + 
+                  sizeof(u64) + 10000 * sizeof(u8), 
                   IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
@@ -1421,6 +1424,13 @@ EXP_ST void setup_shm(void) {
 
   memset(new_cmp_operands_sub_cnt, 0, (1) * sizeof(u64));
   memset(new_cmp_operands_sub_cnt + sizeof(u64), 0x3f, (10000) * sizeof(u64));
+
+  // uintptr_t new_cmp_operands_sub_cnt_uintptr = (uintptr_t)new_cmp_operands_sub_cnt;
+  // cmp_resloved_cnt = (u64*)(new_cmp_operands_sub_cnt_uintptr + sizeof(u64) * (10000 + 1));
+
+  cmp_resloved_cnt = (u64*)(new_cmp_operands_sub_cnt + (10000 + 1));
+  memset(cmp_resloved_cnt, 0, sizeof(u64));
+  memset(cmp_resloved_cnt + sizeof(u64), 1, sizeof(u8) * 10000);
 
   // gep_size_ptr = (u64*)(trace_bits + MAP_SIZE);
   // gep_index_min_ptr = gep_size_ptr + (1 << 10);
@@ -3283,7 +3293,7 @@ void close_log() {
 }
 
 static inline int has_new_cmp_operands_sub() {
-    if (*new_cmp_operands_sub_cnt > 0) {
+    if (*new_cmp_operands_sub_cnt > 3) {
         total_new_cmp_operands_sub_cnt += *new_cmp_operands_sub_cnt;
         // if (total_new_cmp_operands_sub_cnt % 20 == 0) {
             if (log_file_init) {
@@ -3296,6 +3306,8 @@ static inline int has_new_cmp_operands_sub() {
 
               // 写入日志文件
               write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
+              // 写入日志文件
+              write_log(cmp_resloved_cnt == NULL ? 0 : *cmp_resloved_cnt, current_time, 0);
             }
 
             
@@ -4360,15 +4372,17 @@ static void show_stats(void) {
 
   /* Our gep states */
 
-  sprintf(tmp, "%s ", DI(total_hit_new_gep_status));
+  // sprintf(tmp, "%s ", DI(total_hit_new_gep_status));
   // sprintf(tmp, "%s ", DI(*gep_new_status_cnt));
   // sprintf(tmp, "%s ", DI((u64)(*gep_status_ptr)));
   
 
   // sprintf(tmp, "%s ", DI(total_gep_index_max_cnt));
   // sprintf(tmp, "%s ", DI(gep_index_max_ptr[2]));
+  sprintf(tmp, "%s/%s", DI(cmp_resloved_cnt == NULL ? 0 : *cmp_resloved_cnt), DI(total_cmp_cnt));
+  // sprintf(tmp, "%s/%s", DI(9999), DI(total_cmp_cnt));
 
-  SAYF(bV bSTOP "  total new gep  : " cRST "%-17s " bSTG bV, tmp);
+  SAYF(bV bSTOP " resolved cmp: " cRST "%-17s " bSTG bV, tmp);
 
 
   sprintf(tmp, "%s  ",  DI(total_new_cmp_operands_sub_cnt));

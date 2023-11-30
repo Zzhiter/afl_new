@@ -30,6 +30,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fstream>
+#include <iostream>  // for std::cerr
+#include <unordered_map>
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Statistic.h"
@@ -39,11 +42,16 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 uint64_t id = 2;
 uint64_t cmpId = 2;
+uint64_t cmpResolveId = 2;
+// 记录每个模块的插桩计数
+std::unordered_map<std::string, int> cmpResolveInsertCounts;
 
 namespace
 {
@@ -80,6 +88,10 @@ namespace
     
     void insertGetCmpOperands(IRBuilder<> &IRB, Value *curId, Value *first,
                               Value *second, LLVMContext &C, Module &M, Function *getCmpOperandsFunc);
+    
+    void insertCmpResolve(IRBuilder<> &IRB, Value *curId,
+                          LLVMContext &C, Module &M, Function *cmpResolveFunc);
+
     // StringRef getPassName() const override {
     //  return "American Fuzzy Lop Instrumentation";
     // }
@@ -88,6 +100,39 @@ namespace
 }
 
 char AFLCoverage::ID = 0;
+
+// Function to write insert counts to a file
+void writeInsertCountsToFile(const std::string &filename, const std::string &moduleName, int insertCount)
+{
+    std::ofstream outputFile(filename, std::ios::app); // Use std::ios::app to append to the file
+
+    if (outputFile.is_open())
+    {
+        outputFile << moduleName << ": " << insertCount << std::endl;
+        outputFile.close();
+    }
+    else
+    {
+        std::cerr << "Unable to open file '" << filename << "' for writing." << std::endl;
+    }
+}
+
+// 将插桩计数写入文件
+void writeCountsToFile(const std::string &filename) {
+    std::error_code EC;
+    llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Append);
+
+    if (EC) {
+        llvm::errs() << "Error opening file: " << EC.message() << "\n";
+        return;
+    }
+
+    for (const auto &entry : cmpResolveInsertCounts) {
+        file << entry.first << ": " << entry.second << "\n";
+    }
+
+    file.close();
+}
 
 static bool isIgnoreFunction(const llvm::Function *F) {
 
@@ -220,6 +265,14 @@ void AFLCoverage::insertGetCmpOperands(IRBuilder<> &IRB, Value *curId, Value *fi
   // errs() << "Insert insertGetCmpOperands func success!\n";
 }
 
+void AFLCoverage::insertCmpResolve(IRBuilder<> &IRB, Value *curId,
+                                   LLVMContext &C, Module &M, Function *cmpResolveFunc)
+{
+  Value *cmpResolveFuncArgID = {curId};
+  IRB.CreateCall(cmpResolveFunc, {cmpResolveFuncArgID});
+  // errs() << "Insert insertGetCmpOperands func success!\n";
+}
+
 bool AFLCoverage::runOnModule(Module &M)
 {
 
@@ -289,11 +342,20 @@ bool AFLCoverage::runOnModule(Module &M)
   Function *getCmpOperandsFunc = Function::Create(
       getCmpStatusFuncType, GlobalValue::ExternalLinkage, "__afl_cmp_operands", &M);
 
+  FunctionType *cmpResolveFuncType = FunctionType::get(
+      Type::getVoidTy(C),                                              // return type
+      {Type::getInt64Ty(C)},                                           // argument types
+      false                                                            // variadic function
+  );
+  Function *cmpResolveFunc = Function::Create(
+      cmpResolveFuncType, GlobalValue::ExternalLinkage, "__afl_cmp_resolve", &M);
+
   /* Our Instrument before afl's */
 
   int gepStatusInsertCnt = 0;
   int cmpStatusInsertCnt = 0;
   int cmpOperandsInsertCnt = 0;
+  int cmpResolveInsertCnt = 0;
 
   for (auto &F : M)
   {
@@ -303,6 +365,27 @@ bool AFLCoverage::runOnModule(Module &M)
 
     for (auto &BB : F)
     {
+      if (BB.getName().str().find("if.then") == 0) {
+        uint64_t curId;
+        curId = cmpResolveId++;
+        if (curId < 10000) {
+          ConstantInt *curIdValue = ConstantInt::get(Int64Ty, curId);
+
+          // IRBuilder<> IRB(&BB, BB.begin());
+          // Get the first insertion point
+          BasicBlock::iterator I = BB.getFirstInsertionPt();
+          // Insert instruction at the beginning
+          IRBuilder<> IRB(&*I);
+
+          insertCmpResolve(IRB, curIdValue, C, M, cmpResolveFunc);
+          cmpResolveInsertCnt++;
+
+          // 获取模块名称
+          std::string moduleName = M.getName().str();
+          // 更新计数
+          cmpResolveInsertCounts[moduleName]++;
+        }   
+      }
       for (auto &Inst : BB)
       {
         if (auto *GEP = dyn_cast<GetElementPtrInst>(&Inst))
@@ -391,6 +474,12 @@ bool AFLCoverage::runOnModule(Module &M)
   OKF("Instrumented %u gepStatus locations.", gepStatusInsertCnt);
   OKF("Instrumented %u cmpStatus locations.", cmpStatusInsertCnt);
   OKF("Instrumented %u cmpOperands locations.", cmpOperandsInsertCnt);
+  OKF("Instrumented %u cmpResolved locations.", cmpResolveInsertCnt);
+
+  // // 使用函数写入文件
+  // writeInsertCountsToFile("insert_counts.txt", M.getName().str(), cmpResolveInsertCnt);
+  // 在退出时写入文件
+    writeCountsToFile("output.txt");
 
   /* Instrument all the things! */
 
