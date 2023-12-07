@@ -270,12 +270,12 @@ struct queue_entry {
   u32 bitmap_size,                    /* Number of bits set in bitmap     */
       exec_cksum,                     /* Checksum of the execution trace  */
       // gep_index_max_cnt;           /* Count of trigger gep index max   */
-      gep_new_status_cnt;
+      gep_new_status_cnt,
+      new_cmp_operands_sub_cnt;
 
   u64 exec_us,                        /* Execution time (us)              */
       handicap,                       /* Number of queue cycles behind    */
-      depth,                          /* Path depth                       */
-      new_cmp_operands_sub_cnt;       
+      depth;                          /* Path depth                       */       
 
   u8* trace_mini;                     /* Trace bytes, if kept             */
   u32 tc_ref;                         /* Trace bytes ref count            */
@@ -3371,6 +3371,13 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
       queued_with_cov++;
     }
 
+    queue_top->new_cmp_operands_sub_cnt = *new_cmp_operands_sub_cnt;
+
+    if (queue_top->new_cmp_operands_sub_cnt > 10) {
+      queue_top->favored = 1;
+      queued_favored++;
+    }
+
     // if (hngm == 1) {
     //   queue_top->gep_index_max_cnt = gep_index_max_ptr[0];
     // }
@@ -5026,6 +5033,13 @@ static u32 calculate_score(struct queue_entry* q) {
   // if (q->gep_new_status_cnt) {
   //   perf_score *= q->gep_new_status_cnt;
   // }
+
+  if (q->new_cmp_operands_sub_cnt) {
+    if (q->new_cmp_operands_sub_cnt > 10) 
+      perf_score *= 10;
+    else 
+      perf_score *= q->gep_new_status_cnt;
+  }
 
   /* Make sure that we don't go over limit. */
 
