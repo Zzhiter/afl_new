@@ -3304,9 +3304,7 @@ static inline int has_new_cmp_operands_sub() {
               u32 t_bytes = count_non_255_bytes(virgin_bits);
               double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
 
-              // 写入日志文件
               write_log(total_new_cmp_operands_sub_cnt, current_time, t_byte_ratio);
-              // 写入日志文件
               write_log(cmp_resloved_cnt == NULL ? 0 : *cmp_resloved_cnt, current_time, 0);
             }
 
@@ -3347,7 +3345,8 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
       // (!(hngm = has_new_gep_max()))
         // (!(hngs = has_new_gep_status()))
         // (!(hncops = has_new_cmp_operands_sub()))
-        1
+        hncops
+        // 1
       ) {
       if (crash_mode) total_crashes++;
       return 0;
