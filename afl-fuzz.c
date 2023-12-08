@@ -3338,14 +3338,14 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
 
-    hncops = has_new_cmp_operands_sub();
+    // hncops = has_new_cmp_operands_sub();
 
     if (
       (!(hnb = has_new_bits(virgin_bits))) && 
       // (!(hngm = has_new_gep_max()))
         // (!(hngs = has_new_gep_status()))
-        // (!(hncops = has_new_cmp_operands_sub()))
-        hncops
+        (!(hncops = has_new_cmp_operands_sub()))
+        // hncops
         // 1
       ) {
       if (crash_mode) total_crashes++;
